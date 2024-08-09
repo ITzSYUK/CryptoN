@@ -114,6 +114,7 @@ class DetailWindow(QWidget):
         layout.addWidget(self.label)
         cert_list = Run_Crypton_Functions(
             3).run_crypton_show_list_sertificate()
+        cert_list.pop()
         for item in cert_list:
             QListWidgetItem(item, self.del_cert_list)
         self.del_cert_list.itemDoubleClicked.connect(
