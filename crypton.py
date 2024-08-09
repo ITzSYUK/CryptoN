@@ -33,6 +33,8 @@ class DetailWindow(QWidget):
             self.setup_one_sertificate()
         if self.type == 2:
             self.setup_all_sertificate(password)
+        if self.type == 3:
+            self.delete_certificate_window()
 
     def setup_one_sertificate(self):
         layout = QVBoxLayout()
@@ -98,6 +100,54 @@ class DetailWindow(QWidget):
             self.thread_log_list_certificates.certificate_installed.connect(
                 self.update_list_for_setup_all_certificates)
             self.thread_log_list_certificates.start()
+
+    def delete_certificate_window(self):
+        self.del_cert_window = QWidget()
+        layout = QVBoxLayout()
+        self.del_cert_list = QListWidget()
+        self.label = QLabel()
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setWordWrap(True)
+        self.delete_button = QPushButton('Удалить сертификат')
+        layout.addWidget(self.del_cert_list)
+        layout.addWidget(self.delete_button)
+        layout.addWidget(self.label)
+        cert_list = Run_Crypton_Functions(
+            3).run_crypton_show_list_sertificate()
+        for item in cert_list:
+            QListWidgetItem(item, self.del_cert_list)
+        self.del_cert_list.itemDoubleClicked.connect(
+            self.delete_certificate_slot)
+        self.delete_button.clicked.connect(self.delete_certificate_slot)
+        self.del_cert_window.setLayout(layout)
+        self.del_cert_window.setWindowTitle('Удаление сертификатов')
+        self.del_cert_window.setFixedSize(600, 300)
+
+        self.del_cert_window.show()
+
+        self.certificate_installed.connect(self.update_label)
+
+    def delete_certificate_slot(self, item=None):
+        selected_item = self.del_cert_list.selectedItems()
+        if selected_item:
+            delete_sertificate_by_button = Run_Crypton_Functions(
+                4, self.certificate_installed)
+            delete_sertificate_by_button.run_crypton_show_list_sertificate(
+                selected_item[0].text())
+            self.remove_certificate_name_from_list()
+        elif item:
+            delete_sertificate_by_double_click = Run_Crypton_Functions(
+                4, self.certificate_installed)
+            delete_sertificate_by_double_click.run_crypton_show_list_sertificate(
+                item.text())
+            self.remove_certificate_name_from_list()
+        else:
+            self.certificate_installed.emit("Сертификат не выбран")
+
+    def remove_certificate_name_from_list(self):
+        selected_certificate = self.del_cert_list.currentItem()
+        self.del_cert_list.takeItem(
+            self.del_cert_list.row(selected_certificate))
 
     @pyqtSlot(str)
     def update_label(self, message):
@@ -171,6 +221,8 @@ class MainWindow(QWidget):
             # Добавление элемента в множество clicked_items, чтобы при следующем нажатии на элемент "Установить все сертификаты" проверить его наличие в множестве
             self.clicked_items.add(item.text())
             self.button.clicked.connect(self.password_verification)
+        if item.text() == "Удалить сертификат":
+            self.detailWindow = DetailWindow(3)
 
     def password_verification(self):
         input_password = self.enterPasswordLine.text()
@@ -185,14 +237,14 @@ class Run_Crypton_Functions:
 
     def run_crypton_show_list_sertificate(self, surname=None):
         smb_connect = CRYPTON(
-            server_ip="192.168.0.104",
-            share_name="OS",
-            folder_path="эцппример",
-            username="Dovakin23",
-            password="1337",
+            server_ip="172.25.87.3",
+            share_name="обменник поликлиники",
+            folder_path="distr/эцппример",
+            username="poli",
+            password="Qq123456",
             client_machine_name="client_machine_name",
-            server_name="itzsy-pc",
-            domain_name="WORKGROUP",
+            server_name="server-terminal",
+            domain_name="SAMBA",
             local_download_path="/home/itzsy/Downloads",
             surname=surname,
             signal=self.signal
@@ -201,6 +253,11 @@ class Run_Crypton_Functions:
             smb_connect.search_and_download()
         if self.type == 2:
             smb_connect.install_all_certificates()
+        if self.type == 3:
+            smb_connect.list_of_installed_certificates()
+            return smb_connect.list_of_installed_certificates()
+        if self.type == 4:
+            smb_connect.delete_certificate_method(surname)
             # smb_connect.close_connection()
         smb_connect.list_folders()
         return smb_connect.list_folders()
@@ -303,6 +360,44 @@ class CRYPTON:
                 if file.isDirectory:
                     self.download_directory_from_smb(
                         remote_file_path, local_dir_path)
+
+    def list_of_installed_certificates(self):
+        with os.popen("certmgr -list | grep 'Субъект' | grep 'CN=' | sed -n 's/.*CN=//p'") as stream:
+            output = stream.read()
+
+        list_of_installed_certificates = output.split('\n')
+        list_of_installed_certificates_with_numbers = []
+        number_of_lines = 1
+        for line in list_of_installed_certificates:
+            line = f"{number_of_lines}: {line}"
+            number_of_lines += 1
+            list_of_installed_certificates_with_numbers.append(line)
+        return list_of_installed_certificates_with_numbers
+
+    def delete_certificate_method(self, surname):
+        user_name = surname.split(": ", 1)[1]
+
+        with os.popen(f"certmgr -list | awk -v user=\"{user_name}\" '$0 ~ user {{found=1}} found && /Идентификатор ключа/ {{print $NF; exit}}'") as stream:  # noqa
+            key_identifier = stream.read()
+
+        # result = os.system(f"certmgr -delete -store uMy -keyid {key_identifier}")  # noqa
+
+        # if result == 0:
+        #     self.signal.emit(f"Сертификат пользователя {user_name} успешно удален.")  # noqa
+
+        try:
+            result = subprocess.run(f"certmgr -delete -store uMy -keyid {key_identifier}",  # noqa
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            # Если код результата равен нулю, то в сигнал записывается сообщение об успешной установке сертификата
+            if result.returncode == 0:
+                self.signal.emit(
+                    f"Сертификат пользователя {user_name} успешно удален.")
+        except subprocess.CalledProcessError as e:
+            self.signal.emit(f"Ошибка при удалении сертификата {user_name}. Код ошибки: {e.returncode}. Сообщение: {e.stderr}")  # noqa
 
     def close_connection(self):
         self.conn.close()
