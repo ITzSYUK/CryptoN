@@ -39,12 +39,15 @@ class DetailWindow(QWidget):
     def setup_one_sertificate(self):
         layout = QVBoxLayout()
         self.listWidget = QListWidget()
+        self.search_certificate_line = QLineEdit()
+        self.search_certificate_line.setPlaceholderText("Введите свою фамилию")
         self.label = QLabel()
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.start_button = QPushButton('Установить сертификат')
         self.listWidget.setFont(self.font())
         self.label.setFont(self.font())
         self.label.setWordWrap(True)
+        layout.addWidget(self.search_certificate_line)
         layout.addWidget(self.listWidget)
         layout.addWidget(self.start_button)
         layout.addWidget(self.label)
@@ -60,6 +63,8 @@ class DetailWindow(QWidget):
         self.setFixedSize(500, 300)
 
         self.certificate_installed.connect(self.update_label)
+        self.search_certificate_line.textChanged.connect(
+            self.filter_certificate_list)
 
     def download_one_sertificate(self, item=None):
         selected_item = self.listWidget.selectedItems()
@@ -149,6 +154,13 @@ class DetailWindow(QWidget):
         selected_certificate = self.del_cert_list.currentItem()
         self.del_cert_list.takeItem(
             self.del_cert_list.row(selected_certificate))
+
+    def filter_certificate_list(self):
+        found_cert_name = self.search_certificate_line.text().lower()
+        for i in range(self.listWidget.count()):
+            found_cert = self.listWidget.item(i)
+            found_cert.setHidden(
+                found_cert_name not in found_cert.text().lower())
 
     @pyqtSlot(str)
     def update_label(self, message):
