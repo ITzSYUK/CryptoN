@@ -110,7 +110,9 @@ class DetailWindow(QWidget):
         self.certificate_installed.connect(
             self.update_list_for_setup_all_certificates)
 
-        if password == "123":
+        verification_password = Run_Crypton_Functions(
+            5).smbconnect_to_crypton()
+        if password == verification_password:
             # self.log_window.show()
             # install_sertificates = Run_Crypton_Functions(
             #     2, self.certificate_installed)
@@ -276,7 +278,6 @@ class MainWindow(QWidget):
     def install_all_certs_password_verification(self):
         input_password = self.enterPasswordLine.text()
         self.password_checker = DetailWindow(2, input_password)
-        # self.password_checker.setup_all_sertificate(input_password)
 
 
 class Run_Crypton_Functions:
