@@ -41,7 +41,7 @@ class DetailWindow(QWidget):
         layout = QVBoxLayout()
         self.listWidget = QListWidget()
         self.search_certificate_line = QLineEdit()
-        self.search_certificate_line.setPlaceholderText("Введите свою фамилию")
+        self.search_certificate_line.setPlaceholderText("ПОИСК: Введите свою фамилию")  # noqa
         self.label = QLabel()
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.listWidget.setFont(self.font())
