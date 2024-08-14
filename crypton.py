@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QListWidget, QLi
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
 import sys
+import io
 
 
 # Класс ShowInstalledLogListCertificate нужен для запуска окна со списком логов установленных сертификатов в отдельном потоке. Это нужно для того, чтобы окно логов открывалось до начала работы метода по установке сертификатов.
@@ -18,7 +19,7 @@ class ShowInstalledLogListCertificate(QThread):
     def run(self):
         install_certificates = Run_Crypton_Functions(
             2, self.certificate_installed)
-        install_certificates.run_crypton_show_list_sertificate()
+        install_certificates.smbconnect_to_crypton()
 
 
 class DetailWindow(QWidget):
@@ -43,15 +44,22 @@ class DetailWindow(QWidget):
         self.search_certificate_line.setPlaceholderText("Введите свою фамилию")
         self.label = QLabel()
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.start_button = QPushButton('Установить сертификат')
         self.listWidget.setFont(self.font())
         self.label.setFont(self.font())
         self.label.setWordWrap(True)
         layout.addWidget(self.search_certificate_line)
         layout.addWidget(self.listWidget)
-        layout.addWidget(self.start_button)
+        # layout.addWidget(self.start_button)
+        items = Run_Crypton_Functions().smbconnect_to_crypton()
+
+        authorize_setup_cert_layout = QHBoxLayout()
+        self.authorize_setup_cert_line = QLineEdit()
+        self.start_button = QPushButton('Установить сертификат')
+        authorize_setup_cert_layout.addWidget(QLabel("Пароль: "))
+        authorize_setup_cert_layout.addWidget(self.authorize_setup_cert_line)
+        authorize_setup_cert_layout.addWidget(self.start_button)
+        layout.addLayout(authorize_setup_cert_layout)
         layout.addWidget(self.label)
-        items = Run_Crypton_Functions().run_crypton_show_list_sertificate()
 
         for item in items:
             QListWidgetItem(item, self.listWidget)
@@ -66,20 +74,29 @@ class DetailWindow(QWidget):
         self.search_certificate_line.textChanged.connect(
             self.filter_certificate_list)
 
-    def download_one_sertificate(self, item=None):
-        selected_item = self.listWidget.selectedItems()
-        if selected_item:
-            download_sertificate_by_button = Run_Crypton_Functions(
-                1, self.certificate_installed)
-            download_sertificate_by_button.run_crypton_show_list_sertificate(
-                selected_item[0].text())
-        elif item:
-            download_sertificate_by_double_click = Run_Crypton_Functions(
-                1, self.certificate_installed)
-            download_sertificate_by_double_click.run_crypton_show_list_sertificate(
-                item.text())
+    def download_one_sertificate(self, item=None, password=None):
+        password = self.authorize_setup_cert_line.text()
+        verification_password = Run_Crypton_Functions(
+            5).smbconnect_to_crypton()
+        if password == verification_password:
+            selected_item = self.listWidget.selectedItems()
+            if selected_item:
+                download_sertificate_by_button = Run_Crypton_Functions(
+                    1, self.certificate_installed)
+                download_sertificate_by_button.smbconnect_to_crypton(
+                    selected_item[0].text())
+            elif item:
+                download_sertificate_by_double_click = Run_Crypton_Functions(
+                    1, self.certificate_installed)
+                download_sertificate_by_double_click.smbconnect_to_crypton(
+                    item.text())
+            else:
+                self.certificate_installed.emit("Сертификат не выбран")
+        elif password == "":
+            self.certificate_installed.emit(
+                "Для начала установки введите пароль")
         else:
-            self.certificate_installed.emit("Сертификат не выбран")
+            self.certificate_installed.emit("Неверный пароль")
 
     def setup_all_sertificate(self, password=None):
         self.log_window = QWidget()
@@ -97,7 +114,7 @@ class DetailWindow(QWidget):
             # self.log_window.show()
             # install_sertificates = Run_Crypton_Functions(
             #     2, self.certificate_installed)
-            # install_sertificates.run_crypton_show_list_sertificate()
+            # install_sertificates.smbconnect_to_crypton()
             self.log_window.show()
             # Создается новый экземпляр потока для открытия окна со списком логов установленных сертификатов
             self.thread_log_list_certificates = ShowInstalledLogListCertificate(
@@ -118,7 +135,7 @@ class DetailWindow(QWidget):
         layout.addWidget(self.delete_button)
         layout.addWidget(self.label)
         cert_list = Run_Crypton_Functions(
-            3).run_crypton_show_list_sertificate()
+            3).smbconnect_to_crypton()
         cert_list.pop()
         for item in cert_list:
             QListWidgetItem(item, self.del_cert_list)
@@ -138,13 +155,13 @@ class DetailWindow(QWidget):
         if selected_item:
             delete_sertificate_by_button = Run_Crypton_Functions(
                 4, self.certificate_installed)
-            delete_sertificate_by_button.run_crypton_show_list_sertificate(
+            delete_sertificate_by_button.smbconnect_to_crypton(
                 selected_item[0].text())
             self.remove_certificate_name_from_list()
         elif item:
             delete_sertificate_by_double_click = Run_Crypton_Functions(
                 4, self.certificate_installed)
-            delete_sertificate_by_double_click.run_crypton_show_list_sertificate(
+            delete_sertificate_by_double_click.smbconnect_to_crypton(
                 item.text())
             self.remove_certificate_name_from_list()
         else:
@@ -183,8 +200,9 @@ class MainWindow(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.layout = QVBoxLayout()
+        self.main_window_certificates_layout = QVBoxLayout()
         self.listWidget = QListWidget()
+        self.listWidget.setFixedSize(480, 150)
 
         self.listWidget.setFont(self.font())
 
@@ -193,14 +211,14 @@ class MainWindow(QWidget):
         for item in items:
             QListWidgetItem(item, self.listWidget)
         self.listWidget.itemDoubleClicked.connect(self.showDetailWindow)
-        self.layout.addWidget(self.listWidget)
-        self.setLayout(self.layout)
+        self.main_window_certificates_layout.addWidget(self.listWidget)
+        self.setLayout(self.main_window_certificates_layout)
         self.setWindowTitle(
             'Специальный установщик криптографических алгоритмов')
-        self.setFixedSize(500, 200)
+        # self.setFixedSize(500, 200)
 
-        # Создание пустого множества для проверки нажатия на элементы списка
-        self.clicked_items = set()
+        # Создание пустого множества для проверки нажатия на элементы списка главного окна
+        self.clicked_items_main_window = set()
 
     def font(self):
         font = QFont()
@@ -208,36 +226,54 @@ class MainWindow(QWidget):
         font.setPointSize(12)
         return font
 
-    def authorize_widget(self):
+    def authorize_widget(self, type=0):
         # горизонтальная настройка виджетов
-        self.hbox = QHBoxLayout()
-        self.label = QLabel('Введите пароль:')
+        self.authorize_widget_layout = QHBoxLayout()
+        if type == 1:
+            self.label = QLabel(
+                'Пароль установки отдельного сертификата:')
+        if type == 2:
+            self.label = QLabel(
+                'Пароль установки всех сертификатов:')
         self.enterPasswordLine = QLineEdit()
-        self.button = QPushButton('Продолжить')
+        self.authorize_button = QPushButton('Продолжить')
         self.label.setFont(self.font())
         self.enterPasswordLine.setFont(self.font())
-        self.button.setFont(self.font())
-        self.hbox.addWidget(self.label)
-        self.hbox.addWidget(self.enterPasswordLine)
-        self.hbox.addWidget(self.button)
-        self.layout.addLayout(self.hbox)
+        self.authorize_button.setFont(self.font())
+        # self.hbox.addWidget(self.label)
+        self.authorize_widget_layout.addWidget(self.enterPasswordLine)
+        self.authorize_widget_layout.addWidget(self.authorize_button)
+        self.main_window_certificates_layout.addWidget(self.label)
+        self.main_window_certificates_layout.addLayout(
+            self.authorize_widget_layout)
 
     def showDetailWindow(self, item):
-        if item.text() == "Установить отдельный сертификат":
+        if item.text() == "Установить отдельный сертификат" and len(self.clicked_items_main_window) in [0, 1]:
+            # self.authorize_widget(1)
+            # item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+            # self.clicked_items_main_window.add(item.text())
+            # self.authorize_button.clicked.connect(
+            #     self.install_one_cert_password_verification)
             self.detailWindow = DetailWindow(1)
             self.detailWindow.show()
         # Условие, при котором проверяется, была ли нажата кнопка "Установить все сертификаты" и проверяется наличие элемента в множестве clicked_items
-        if item.text() == "Установить все сертификаты" and len(self.clicked_items) == 0:
-            self.authorize_widget()
+        if item.text() == "Установить все сертификаты" and len(self.clicked_items_main_window) in [0, 1]:
+            self.authorize_widget(2)
             # Получение флагов текущего элемента item, которые указывают на состояние этого элемента. Qt.ItemFlag.ItemIsEnabled означает, что элемент доступен для взаимодействия с ним. Оператор '~' означает побитовое отрицание, инвертируя флаг взаимодействия с элементом
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
             # Добавление элемента в множество clicked_items, чтобы при следующем нажатии на элемент "Установить все сертификаты" проверить его наличие в множестве
-            self.clicked_items.add(item.text())
-            self.button.clicked.connect(self.password_verification)
+            self.clicked_items_main_window.add(item.text())
+            self.authorize_button.clicked.connect(
+                self.install_all_certs_password_verification)
         if item.text() == "Удалить сертификат":
             self.detailWindow = DetailWindow(3)
 
-    def password_verification(self):
+    # def install_one_cert_password_verification(self):
+    #     input_password = self.enterPasswordLine.text()
+    #     self.password_checker = DetailWindow(1, input_password)
+    #     self.password_checker.show()
+
+    def install_all_certs_password_verification(self):
         input_password = self.enterPasswordLine.text()
         self.password_checker = DetailWindow(2, input_password)
         # self.password_checker.setup_all_sertificate(input_password)
@@ -248,17 +284,33 @@ class Run_Crypton_Functions:
         self.type = type
         self.signal = signal
 
-    def run_crypton_show_list_sertificate(self, surname=None):
+    def smbconnect_to_crypton(self, surname=None):
+        # smb_connect = CRYPTON(
+        #     server_ip="172.25.87.3",
+        #     share_name="обменник поликлиники",
+        #     folder_path="distr/certificates",
+        #     username="cert_user",
+        #     password="cert2024",
+        #     client_machine_name="client_machine_name",
+        #     server_name="server-terminal",
+        #     domain_name="SAMBA",
+        #     local_download_path="/home/itzsy/Downloads",
+        #     password_file_path="distr/cert2024.txt",
+        #     surname=surname,
+        #     signal=self.signal
+        # )
+        # Проверка работы скрипта локально
         smb_connect = CRYPTON(
-            server_ip="172.25.87.3",
-            share_name="обменник поликлиники",
-            folder_path="distr/эцппример",
-            username="poli",
-            password="Qq123456",
+            server_ip="192.168.0.104",
+            share_name="OS",
+            folder_path="certificates",
+            username="Dovakin23",
+            password="1337",
             client_machine_name="client_machine_name",
-            server_name="server-terminal",
-            domain_name="SAMBA",
+            server_name="itzsy-pc",
+            domain_name="WORKGROUP",
             local_download_path="/home/itzsy/Downloads",
+            password_file_path="cert2024.txt",
             surname=surname,
             signal=self.signal
         )
@@ -271,13 +323,15 @@ class Run_Crypton_Functions:
             return smb_connect.list_of_installed_certificates()
         if self.type == 4:
             smb_connect.delete_certificate_method(surname)
+        if self.type == 5:
+            return smb_connect.open_password_file()
             # smb_connect.close_connection()
         smb_connect.list_folders()
         return smb_connect.list_folders()
 
 
 class CRYPTON:
-    def __init__(self, server_ip, share_name, folder_path, username, password, client_machine_name, server_name, domain_name, local_download_path, surname=None, signal=None):
+    def __init__(self, server_ip, share_name, folder_path, username, password, client_machine_name, server_name, domain_name, local_download_path, password_file_path, surname=None, signal=None):
         self.server_ip = server_ip
         self.share_name = share_name
         self.folder_path = folder_path
@@ -289,6 +343,7 @@ class CRYPTON:
         self.local_download_path = local_download_path
         self.surname = surname
         self.signal = signal
+        self.password_file_path = password_file_path
 
         if not os.path.exists(self.local_download_path):
             os.makedirs(self.local_download_path)
@@ -422,6 +477,16 @@ class CRYPTON:
             if file.filename not in [".", ".."] and file.isDirectory:
                 folders.append(file.filename)
         return folders
+
+    def open_password_file(self):
+        # Чтение файла напрямую в память
+        password_obj = io.BytesIO()
+        self.conn.retrieveFile(
+            self.share_name, self.password_file_path, password_obj)
+        password_obj.seek(0)
+        # Декодирование объекта io.BytesIO в строку с удалением переноса строки
+        password = password_obj.read().decode().rstrip('\n')
+        return password
 
 
 if __name__ == '__main__':
