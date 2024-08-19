@@ -17,9 +17,12 @@ class ShowInstalledLogListCertificate(QThread):
         self.password = password
 
     def run(self):
-        install_certificates = Run_Crypton_Functions(
-            2, self.certificate_installed)
-        install_certificates.smbconnect_to_crypton()
+        try:
+            install_certificates = Run_Crypton_Functions(
+                2, self.certificate_installed)
+            install_certificates.smbconnect_to_crypton()
+        finally:
+            self.quit()
 
 
 class DetailWindow(QWidget):
@@ -296,7 +299,7 @@ class Run_Crypton_Functions:
         self.signal = signal
 
     def smbconnect_to_crypton(self, surname=None):
-        smb_connect = CRYPTON(
+        with CRYPTON(
             server_ip="172.25.87.3",
             share_name="обменник поликлиники",
             folder_path="distr/certificates",
@@ -309,36 +312,18 @@ class Run_Crypton_Functions:
             password_file_path="/distr/certs_password.txt",
             surname=surname,
             signal=self.signal
-        )
-        # Проверка работы скрипта локально
-        # smb_connect = CRYPTON(
-        #     server_ip="192.168.0.104",
-        #     share_name="OS",
-        #     folder_path="certificates",
-        #     username="Dovakin23",
-        #     password="1337",
-        #     client_machine_name="client_machine_name",
-        #     server_name="itzsy-pc",
-        #     domain_name="WORKGROUP",
-        #     local_download_path="/home/itzsy/Downloads",
-        #     password_file_path="certs_password.txt",
-        #     surname=surname,
-        #     signal=self.signal
-        # )
-        if self.type == 1:
-            smb_connect.search_and_download()
-        if self.type == 2:
-            smb_connect.install_all_certificates()
-        if self.type == 3:
-            smb_connect.list_of_installed_certificates()
-            return smb_connect.list_of_installed_certificates()
-        if self.type == 4:
-            smb_connect.delete_certificate_method(surname)
-        if self.type == 5:
-            return smb_connect.open_password_file()
-            # smb_connect.close_connection()
-        smb_connect.list_folders()
-        return smb_connect.list_folders()
+        ) as smb_connect:
+            if self.type == 1:
+                smb_connect.search_and_download()
+            if self.type == 2:
+                smb_connect.install_all_certificates()
+            if self.type == 3:
+                return smb_connect.list_of_installed_certificates()
+            if self.type == 4:
+                smb_connect.delete_certificate_method(surname)
+            if self.type == 5:
+                return smb_connect.open_password_file()
+            return smb_connect.list_folders()
 
 
 class CRYPTON:
@@ -359,9 +344,16 @@ class CRYPTON:
         if not os.path.exists(self.local_download_path):
             os.makedirs(self.local_download_path)
 
+    def __enter__(self):
+        # Здесь происходит подключение к серверу и создание объекта SMBConnection с использованием контекстного менеджера в классе Run_Crypton_Functions
         self.conn = SMBConnection(self.username, self.password, self.client_machine_name,
                                   self.server_name, domain=self.domain_name, use_ntlm_v2=True)
         assert self.conn.connect(self.server_ip, 139)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Здесь происходит отключение от сервера
+        self.conn.close()
 
     def search_and_download(self, folder_path=None):
         if folder_path is None:
