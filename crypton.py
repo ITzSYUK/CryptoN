@@ -394,7 +394,7 @@ class CRYPTON:
                             local_file_path, local_file_name)
 
     def setup_sertificate(self, local_file_path, local_file_name):
-        with os.popen('csptest -keyset -enum_cont -fqcn -verifyc') as stream:
+        with os.popen('/opt/cprocsp/bin/amd64/csptest -keyset -enum_cont -fqcn -verifyc') as stream:
             output = stream.read()
 
         lines = output.split('\n')
@@ -403,7 +403,7 @@ class CRYPTON:
             line for line in lines if line.startswith(rf"\\.\HDIMAGE\{local_file_name[0:6]}")]
 
         try:
-            result = subprocess.run(f"certmgr -inst -file '{local_file_path}' -cont '{matching_lines[0]}'",  # noqa
+            result = subprocess.run(f"/opt/cprocsp/bin/amd64/certmgr -inst -file '{local_file_path}' -cont '{matching_lines[0]}'",  # noqa
                 shell=True,
                 check=True,
                 capture_output=True,
@@ -433,7 +433,7 @@ class CRYPTON:
                         remote_file_path, local_dir_path)
 
     def list_of_installed_certificates(self):
-        with os.popen("certmgr -list | grep 'Субъект' | grep 'CN=' | sed -n 's/.*CN=//p'") as stream:
+        with os.popen("/opt/cprocsp/bin/amd64/certmgr -list | grep 'Субъект' | grep 'CN=' | sed -n 's/.*CN=//p'") as stream:
             output = stream.read()
 
         list_of_installed_certificates = output.split('\n')
@@ -448,7 +448,7 @@ class CRYPTON:
     def delete_certificate_method(self, surname):
         user_name = surname.split(": ", 1)[1]
 
-        with os.popen(f"certmgr -list | awk -v user=\"{user_name}\" '$0 ~ user {{found=1}} found && /Идентификатор ключа/ {{print $NF; exit}}'") as stream:  # noqa
+        with os.popen(f"/opt/cprocsp/bin/amd64/certmgr -list | awk -v user=\"{user_name}\" '$0 ~ user {{found=1}} found && /Идентификатор ключа/ {{print $NF; exit}}'") as stream:  # noqa
             key_identifier = stream.read()
 
         # result = os.system(f"certmgr -delete -store uMy -keyid {key_identifier}")  # noqa
@@ -457,7 +457,7 @@ class CRYPTON:
         #     self.signal.emit(f"Сертификат пользователя {user_name} успешно удален.")  # noqa
 
         try:
-            result = subprocess.run(f"certmgr -delete -store uMy -keyid {key_identifier}",  # noqa
+            result = subprocess.run(f"/opt/cprocsp/bin/amd64/certmgr -delete -store uMy -keyid {key_identifier}",  # noqa
                 shell=True,
                 check=True,
                 capture_output=True,
