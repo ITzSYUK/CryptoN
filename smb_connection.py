@@ -2,6 +2,7 @@ import os
 import io
 import subprocess
 from smb.SMBConnection import SMBConnection
+import crypton_database as db
 
 
 class SMBConnectionManager:
@@ -169,17 +170,18 @@ class Run_Crypton_Functions:
     def __init__(self, type=0, signal=None):
         self.type = type
         self.signal = signal
+        self.smb_settings_from_db = db.DatabaseApp().select_from_db()
 
     def smbconnect_to_crypton(self, surname=None):
         with SMBConnectionManager(
-            server_ip="172.25.87.3",
-            share_name="обменник поликлиники",
-            folder_path="distr/certificates",
-            username="cert_user",
-            password="cert2024",
+            server_ip=self.smb_settings_from_db[0][1],
+            share_name=self.smb_settings_from_db[0][6],
+            folder_path=self.smb_settings_from_db[0][7],
+            username=self.smb_settings_from_db[0][2],
+            password=self.smb_settings_from_db[0][3],
             client_machine_name="client_machine_name",
-            server_name="server-terminal",
-            domain_name="SAMBA",
+            server_name=self.smb_settings_from_db[0][5],
+            domain_name=self.smb_settings_from_db[0][4],
             local_download_path="/var/opt/cprocsp/keys/user/",
             password_file_path="/distr/certs_password.txt",
             surname=surname,

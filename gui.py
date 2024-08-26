@@ -2,6 +2,115 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, 
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
 from smb_connection import Run_Crypton_Functions
+import crypton_database as db
+
+
+class SettingsWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setStyleSheet("""
+            QLineEdit {
+                min-width: 400px;
+                max-width: 400px;
+                height: 30px;
+            },
+        """)
+        self.setupUi()
+        self.show()
+
+    def setupUi(self):
+        self.setWindowTitle('Настройки')
+        self.resize(500, 300)
+        placeholder = db.DatabaseApp().select_from_db()
+
+        main_layout = QVBoxLayout()
+        # IP Layout
+        ip_layout = QHBoxLayout()
+        self.ip_line_text = QLabel('IP:')
+        self.ip_line_edit = QLineEdit()
+        self.ip_line_edit.setPlaceholderText(placeholder[0][1])
+        ip_layout.addWidget(self.ip_line_text)
+        ip_layout.addWidget(self.ip_line_edit)
+
+        # Username Layout
+        username_layout = QHBoxLayout()
+        self.username_line_text = QLabel('Username:')
+        self.username_line_edit = QLineEdit()
+        self.username_line_edit.setPlaceholderText(placeholder[0][2])
+        username_layout.addWidget(self.username_line_text)
+        username_layout.addWidget(self.username_line_edit)
+
+        # Password Layout
+        password_layout = QHBoxLayout()
+        self.password_line_text = QLabel('Password:')
+        self.password_line_edit = QLineEdit()
+        self.password_line_edit.setPlaceholderText(placeholder[0][3])
+        password_layout.addWidget(self.password_line_text)
+        password_layout.addWidget(self.password_line_edit)
+
+        # Domain name Layout
+        domain_name_layout = QHBoxLayout()
+        self.domain_name_line_text = QLabel('Domain name:')
+        self.domain_name_line_edit = QLineEdit()
+        self.domain_name_line_edit.setPlaceholderText(placeholder[0][4])
+        domain_name_layout.addWidget(self.domain_name_line_text)
+        domain_name_layout.addWidget(self.domain_name_line_edit)
+
+        # Server name Layout
+        server_name_layout = QHBoxLayout()
+        self.server_name_line_text = QLabel('Server name:')
+        self.server_name_line_edit = QLineEdit()
+        self.server_name_line_edit.setPlaceholderText(placeholder[0][5])
+        server_name_layout.addWidget(self.server_name_line_text)
+        server_name_layout.addWidget(self.server_name_line_edit)
+
+        # Sharename Layout
+        sharename_layout = QHBoxLayout()
+        self.sharename_line_text = QLabel('Sharename:')
+        self.sharename_line_edit = QLineEdit()
+        self.sharename_line_edit.setPlaceholderText(placeholder[0][6])
+        sharename_layout.addWidget(self.sharename_line_text)
+        sharename_layout.addWidget(self.sharename_line_edit)
+
+        # Folder path Layout
+        folder_path_layout = QHBoxLayout()
+        self.folder_path_line_text = QLabel('Folder path:')
+        self.folder_path_line_edit = QLineEdit()
+        self.folder_path_line_edit.setPlaceholderText(placeholder[0][7])
+        folder_path_layout.addWidget(self.folder_path_line_text)
+        folder_path_layout.addWidget(self.folder_path_line_edit)
+
+        # Save Button Layout
+        save_button_layout = QHBoxLayout()
+        self.save_button = QPushButton('Сохранить')
+        self.save_button.setFixedSize(300, 30)
+        save_button_layout.addWidget(self.save_button)
+
+        self.save_button.clicked.connect(self.save_settings)
+
+        main_layout.addLayout(ip_layout)
+        main_layout.addLayout(username_layout)
+        main_layout.addLayout(password_layout)
+        main_layout.addLayout(domain_name_layout)
+        main_layout.addLayout(server_name_layout)
+        main_layout.addLayout(sharename_layout)
+        main_layout.addLayout(folder_path_layout)
+        main_layout.addLayout(save_button_layout)
+
+        self.setLayout(main_layout)
+
+    def save_settings(self):
+        db.DatabaseApp().save_to_db(
+            self.ip_line_edit.text(),
+            self.username_line_edit.text(),
+            self.password_line_edit.text(),
+            self.domain_name_line_edit.text(),
+            self.server_name_line_edit.text(),
+            self.sharename_line_edit.text(),
+            self.folder_path_line_edit.text(),
+        )
+        self.close()
 
 
 class ShowInstalledLogListCertificate(QThread):
@@ -222,7 +331,7 @@ class MainWindow(QWidget):
         self.listWidget.setFont(self.font())
 
         items = ["Установить отдельный сертификат",
-                 "Установить все сертификаты", "Удалить сертификат"]
+                 "Установить все сертификаты", "Удалить сертификат", "Настройки"]
         for item in items:
             QListWidgetItem(item, self.listWidget)
         self.listWidget.itemDoubleClicked.connect(self.showDetailWindow)
@@ -271,7 +380,15 @@ class MainWindow(QWidget):
                 self.install_all_certs_password_verification)
         if item.text() == "Удалить сертификат":
             self.detailWindow = DetailWindow(3)
+        if item.text() == "Настройки":
+            self.settingsWindow = SettingsWindow()
+            self.settingsWindow.show()
 
     def install_all_certs_password_verification(self):
         input_password = self.enterPasswordLine.text()
         self.password_checker = DetailWindow(2, input_password)
+
+    def closeEvent(self, event):
+        # Закрываем соединение с базой данных перед закрытием приложения
+        self.close_conn = db.DatabaseApp().close_connection()
+        event.accept()  # Завершаем закрытие окна
