@@ -22,7 +22,7 @@ source ./bin/activate
 ## Dependency installation
 
 ```
-python -m pip install pysmb pyqt6
+python -m pip install pysmb pyqt6 pysqlite3
 ```
 
 ## Program startup
