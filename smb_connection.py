@@ -3,6 +3,7 @@ import io
 import subprocess
 from smb.SMBConnection import SMBConnection
 import crypton_database as db
+import gui
 
 
 class SMBConnectionManager:
@@ -73,7 +74,7 @@ class SMBConnectionManager:
                             local_file_path, local_file_name)
 
     def setup_sertificate(self, local_file_path, local_file_name):
-        with os.popen('csptest -keyset -enum_cont -fqcn -verifyc') as stream:
+        with os.popen('/opt/cprocsp/bin/amd64/csptest -keyset -enum_cont -fqcn -verifyc') as stream:
             output = stream.read()
 
         lines = output.split('\n')
@@ -82,7 +83,7 @@ class SMBConnectionManager:
             line for line in lines if line.startswith(rf"\\.\HDIMAGE\{local_file_name[0:6]}")]
 
         try:
-            result = subprocess.run(f"certmgr -inst -file '{local_file_path}' -cont '{matching_lines[0]}'",  # noqa
+            result = subprocess.run(f"/opt/cprocsp/bin/amd64/certmgr -inst -file '{local_file_path}' -cont '{matching_lines[0]}'",  # noqa
                 shell=True,
                 check=True,
                 capture_output=True,
@@ -112,7 +113,7 @@ class SMBConnectionManager:
                         remote_file_path, local_dir_path)
 
     def list_of_installed_certificates(self):
-        with os.popen("certmgr -list | grep 'Субъект' | grep 'CN=' | sed -n 's/.*CN=//p'") as stream:
+        with os.popen("/opt/cprocsp/bin/amd64/certmgr -list | grep 'Субъект' | grep 'CN=' | sed -n 's/.*CN=//p'") as stream:
             output = stream.read()
 
         list_of_installed_certificates = output.split('\n')
@@ -127,11 +128,11 @@ class SMBConnectionManager:
     def delete_certificate_method(self, surname):
         user_name = surname.split(": ", 1)[1]
 
-        with os.popen(f"certmgr -list | awk -v user=\"{user_name}\" '$0 ~ user {{found=1}} found && /Идентификатор ключа/ {{print $NF; exit}}'") as stream:  # noqa
+        with os.popen(f"/opt/cprocsp/bin/amd64/certmgr -list | awk -v user=\"{user_name}\" '$0 ~ user {{found=1}} found && /Идентификатор ключа/ {{print $NF; exit}}'") as stream:  # noqa
             key_identifier = stream.read()
 
         try:
-            result = subprocess.run(f"certmgr -delete -store uMy -keyid {key_identifier}",  # noqa
+            result = subprocess.run(f"/opt/cprocsp/bin/amd64/certmgr -delete -store uMy -keyid {key_identifier}",  # noqa
                 shell=True,
                 check=True,
                 capture_output=True,
@@ -170,31 +171,37 @@ class Run_Crypton_Functions:
     def __init__(self, type=0, signal=None):
         self.type = type
         self.signal = signal
-        self.smb_settings_from_db = db.DatabaseApp().select_from_db()
+        self.active_connection_id = db.DatabaseApp().load_active_connection()
+        self.connection = db.DatabaseApp().select_from_db(
+            self.active_connection_id[0])
 
     def smbconnect_to_crypton(self, surname=None):
-        with SMBConnectionManager(
-            server_ip=self.smb_settings_from_db[0][1],
-            share_name=self.smb_settings_from_db[0][6],
-            folder_path=self.smb_settings_from_db[0][7],
-            username=self.smb_settings_from_db[0][2],
-            password=self.smb_settings_from_db[0][3],
-            client_machine_name="client_machine_name",
-            server_name=self.smb_settings_from_db[0][5],
-            domain_name=self.smb_settings_from_db[0][4],
-            local_download_path="/var/opt/cprocsp/keys/user/",
-            password_file_path="/distr/certs_password.txt",
-            surname=surname,
-            signal=self.signal
-        ) as smb_connect:
-            if self.type == 1:
-                smb_connect.search_and_download()
-            if self.type == 2:
-                smb_connect.install_all_certificates()
-            if self.type == 3:
-                return smb_connect.list_of_installed_certificates()
-            if self.type == 4:
-                smb_connect.delete_certificate_method(surname)
-            if self.type == 5:
-                return smb_connect.open_password_file()
-            return smb_connect.list_folders()
+        try:
+            with SMBConnectionManager(
+                server_ip=self.connection[2],
+                share_name=self.connection[7],
+                folder_path=self.connection[8],
+                username=self.connection[3],
+                password=self.connection[4],
+                client_machine_name="client_machine_name",
+                server_name=self.connection[6],
+                domain_name=self.connection[5],
+                local_download_path="/var/opt/cprocsp/keys/user/",
+                password_file_path="/distr/certs_password.txt",
+                surname=surname,
+                signal=self.signal
+            ) as smb_connect:
+                if self.type == 1:
+                    smb_connect.search_and_download()
+                if self.type == 2:
+                    smb_connect.install_all_certificates()
+                if self.type == 3:
+                    return smb_connect.list_of_installed_certificates()
+                if self.type == 4:
+                    smb_connect.delete_certificate_method(surname)
+                if self.type == 5:
+                    return smb_connect.open_password_file()
+                return smb_connect.list_folders()
+        except OSError:
+            gui.MessageWindows().show_warning_message_ui(
+                "Не удалось подключиться к SMB-серверу.")

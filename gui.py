@@ -1,18 +1,36 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout
-from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout, QComboBox, QMessageBox, QCompleter
+from PyQt6.QtGui import QFont, QStandardItemModel, QStandardItem
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
 from smb_connection import Run_Crypton_Functions
 import crypton_database as db
+
+
+class MessageWindows(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.show_warning_message_ui
+        self.show_success_message_ui
+
+    def show_warning_message_ui(self, message):
+        self.message_box = QMessageBox()
+        self.message_box.warning(self, 'Ошибка', message)
+        self.message_box.setWindowTitle('Сообщение')
+
+    def show_success_message_ui(self, message):
+        self.message_box = QMessageBox()
+        self.message_box.information(self, 'Успех', message)
+        self.message_box.setWindowTitle('Сообщение')
 
 
 class SettingsWindow(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.notify_message = MessageWindows()
         self.setStyleSheet("""
             QLineEdit {
-                min-width: 400px;
-                max-width: 400px;
+                min-width: 500px;
+                max-width: 500px;
                 height: 30px;
             },
         """)
@@ -22,14 +40,34 @@ class SettingsWindow(QWidget):
     def setupUi(self):
         self.setWindowTitle('Настройки')
         self.resize(500, 300)
-        placeholder = db.DatabaseApp().select_from_db()
+        # placeholder = db.DatabaseApp().select_from_db()
 
         main_layout = QVBoxLayout()
+
+        # List of connections
+        list_of_connections_layout = QHBoxLayout()
+        font_for_list_of_connections = QFont()
+        font_for_list_of_connections.setPointSize(8)
+        self.list_of_connections_widget = QComboBox(self)
+        self.list_of_connections_widget.setFont(font_for_list_of_connections)
+        # self.list_of_connections_widget.setFixedWidth(400)
+        list_of_connections_layout.addWidget(self.list_of_connections_widget)
+        self.update_combobox_list()
+        self.list_of_connections_widget.currentIndexChanged.connect(
+            self.set_current_connection)
+
+        # Name of connection Layout
+        name_layout = QHBoxLayout()
+        self.name_line_text = QLabel('Name of connection:')
+        self.name_line_edit = QLineEdit()
+        self.name_line_edit.setPlaceholderText("Название подключения")
+        name_layout.addWidget(self.name_line_text)
+        name_layout.addWidget(self.name_line_edit)
+
         # IP Layout
         ip_layout = QHBoxLayout()
         self.ip_line_text = QLabel('IP:')
         self.ip_line_edit = QLineEdit()
-        self.ip_line_edit.setPlaceholderText(placeholder[0][1])
         ip_layout.addWidget(self.ip_line_text)
         ip_layout.addWidget(self.ip_line_edit)
 
@@ -37,7 +75,6 @@ class SettingsWindow(QWidget):
         username_layout = QHBoxLayout()
         self.username_line_text = QLabel('Username:')
         self.username_line_edit = QLineEdit()
-        self.username_line_edit.setPlaceholderText(placeholder[0][2])
         username_layout.addWidget(self.username_line_text)
         username_layout.addWidget(self.username_line_edit)
 
@@ -45,7 +82,6 @@ class SettingsWindow(QWidget):
         password_layout = QHBoxLayout()
         self.password_line_text = QLabel('Password:')
         self.password_line_edit = QLineEdit()
-        self.password_line_edit.setPlaceholderText(placeholder[0][3])
         password_layout.addWidget(self.password_line_text)
         password_layout.addWidget(self.password_line_edit)
 
@@ -53,7 +89,6 @@ class SettingsWindow(QWidget):
         domain_name_layout = QHBoxLayout()
         self.domain_name_line_text = QLabel('Domain name:')
         self.domain_name_line_edit = QLineEdit()
-        self.domain_name_line_edit.setPlaceholderText(placeholder[0][4])
         domain_name_layout.addWidget(self.domain_name_line_text)
         domain_name_layout.addWidget(self.domain_name_line_edit)
 
@@ -61,7 +96,6 @@ class SettingsWindow(QWidget):
         server_name_layout = QHBoxLayout()
         self.server_name_line_text = QLabel('Server name:')
         self.server_name_line_edit = QLineEdit()
-        self.server_name_line_edit.setPlaceholderText(placeholder[0][5])
         server_name_layout.addWidget(self.server_name_line_text)
         server_name_layout.addWidget(self.server_name_line_edit)
 
@@ -69,7 +103,6 @@ class SettingsWindow(QWidget):
         sharename_layout = QHBoxLayout()
         self.sharename_line_text = QLabel('Sharename:')
         self.sharename_line_edit = QLineEdit()
-        self.sharename_line_edit.setPlaceholderText(placeholder[0][6])
         sharename_layout.addWidget(self.sharename_line_text)
         sharename_layout.addWidget(self.sharename_line_edit)
 
@@ -77,18 +110,27 @@ class SettingsWindow(QWidget):
         folder_path_layout = QHBoxLayout()
         self.folder_path_line_text = QLabel('Folder path:')
         self.folder_path_line_edit = QLineEdit()
-        self.folder_path_line_edit.setPlaceholderText(placeholder[0][7])
         folder_path_layout.addWidget(self.folder_path_line_text)
         folder_path_layout.addWidget(self.folder_path_line_edit)
 
-        # Save Button Layout
-        save_button_layout = QHBoxLayout()
+        # Save, Delete and Connect Button Layout
+        buttons_layout = QHBoxLayout()
         self.save_button = QPushButton('Сохранить')
-        self.save_button.setFixedSize(300, 30)
-        save_button_layout.addWidget(self.save_button)
+        self.save_button.setFixedSize(200, 30)
+        self.delete_button = QPushButton('Удалить')
+        self.delete_button.setFixedSize(200, 30)
+        self.connect_button = QPushButton('Подключиться')
+        self.connect_button.setFixedSize(200, 30)
+        buttons_layout.addWidget(self.delete_button)
+        buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.connect_button)
 
         self.save_button.clicked.connect(self.save_settings)
+        self.delete_button.clicked.connect(self.delete_settings)
+        self.connect_button.clicked.connect(self.connect_to_server)
 
+        main_layout.addLayout(list_of_connections_layout)
+        main_layout.addLayout(name_layout)
         main_layout.addLayout(ip_layout)
         main_layout.addLayout(username_layout)
         main_layout.addLayout(password_layout)
@@ -96,12 +138,15 @@ class SettingsWindow(QWidget):
         main_layout.addLayout(server_name_layout)
         main_layout.addLayout(sharename_layout)
         main_layout.addLayout(folder_path_layout)
-        main_layout.addLayout(save_button_layout)
+        main_layout.addLayout(buttons_layout)
 
         self.setLayout(main_layout)
 
+        self.load_active_connection()
+
     def save_settings(self):
-        db.DatabaseApp().save_to_db(
+        result = db.DatabaseApp().save_to_db(
+            self.name_line_edit.text(),
             self.ip_line_edit.text(),
             self.username_line_edit.text(),
             self.password_line_edit.text(),
@@ -110,7 +155,136 @@ class SettingsWindow(QWidget):
             self.sharename_line_edit.text(),
             self.folder_path_line_edit.text(),
         )
-        self.close()
+        if result is False:
+            return
+        self.list_of_connections_widget.addItem(
+            self.name_line_edit.text(), result)
+
+        index = self.list_of_connections_widget.count() - 1
+        self.list_of_connections_widget.setCurrentIndex(index)
+        self.set_current_connection(index)
+
+    def delete_settings(self):
+        index = self.list_of_connections_widget.currentIndex()
+        if index == 0:
+            QMessageBox.warning(
+                self, 'Ошибка', 'Нельзя удалять подключение по умолчанию')
+            return
+        connection_id_to_delete = self.list_of_connections_widget.itemData(
+            index)
+        db.DatabaseApp().delete_from_db(connection_id_to_delete)
+        db.DatabaseApp().save_active_connection("1")
+        self.notify_message.show_success_message_ui(
+            "Подключение удалено!\nВосстановлено активное подключение по умолчанию")
+
+        self.list_of_connections_widget.removeItem(index)
+
+    def update_combobox_list(self):
+        self.list_of_connections_widget.clear()
+        list_of_connections = db.DatabaseApp().update_combobox()
+        for connection in list_of_connections:
+            self.list_of_connections_widget.addItem(
+                connection[1], connection[0])
+
+    def set_current_connection(self, index):
+        if index >= 0:
+            current_connection_index = self.list_of_connections_widget.itemData(
+                index)  # Получаем ID выбранной записи
+            current_connection = db.DatabaseApp().select_from_db(
+                current_connection_index)
+            if current_connection:
+                self.name_line_edit.setText(current_connection[1])
+                self.ip_line_edit.setText(current_connection[2])
+                self.username_line_edit.setText(current_connection[3])
+                self.password_line_edit.setText(current_connection[4])
+                self.domain_name_line_edit.setText(current_connection[5])
+                self.server_name_line_edit.setText(current_connection[6])
+                self.sharename_line_edit.setText(current_connection[7])
+                self.folder_path_line_edit.setText(current_connection[8])
+
+    def connect_to_server(self):
+        # Получаем ID выбранной записи
+        connection_index = self.list_of_connections_widget.currentIndex()
+        if connection_index >= 0:
+            connection_id = self.list_of_connections_widget.itemData(
+                connection_index)
+            db.DatabaseApp().save_active_connection(connection_id)
+            self.notify_message.show_success_message_ui(
+                "Активное подключение установлено!")
+
+    def load_active_connection(self):
+        active_connection_id = db.DatabaseApp().load_active_connection()
+        if active_connection_id[0]:
+            self.load_connection(active_connection_id[0])
+
+    def load_connection(self, connection_id):
+        connection = db.DatabaseApp().select_from_db(connection_id)
+        if connection:
+            self.name_line_edit.setText(connection[1])
+            self.ip_line_edit.setText(connection[2])
+            self.username_line_edit.setText(connection[3])
+            self.password_line_edit.setText(connection[4])
+            self.domain_name_line_edit.setText(connection[5])
+            self.server_name_line_edit.setText(connection[6])
+            self.sharename_line_edit.setText(connection[7])
+            self.folder_path_line_edit.setText(connection[8])
+            index = self.list_of_connections_widget.findText(connection[1])
+            if index >= 0:
+                self.list_of_connections_widget.setCurrentIndex(index)
+
+
+class SettingsAuthorizationWindow(QWidget):
+
+    def __init__(self):
+        super().__init__()
+        self.setupUi()
+
+        self.show()
+
+    def setupUi(self):
+        self.setWindowTitle("Авторизация")
+        self.setFixedSize(300, 110)
+
+        authorize_layout = QVBoxLayout(self)
+        authorize_layout.setSpacing(10)
+
+        login_layout = QHBoxLayout()
+        self.login_label = QLabel("Введите пароль:")
+        self.password_line_edit = QLineEdit()
+
+        login_layout.addWidget(self.login_label)
+        login_layout.addWidget(self.password_line_edit)
+
+        buttons_layout = QHBoxLayout()
+        self.login_button = QPushButton("Войти")
+        self.cancel_button = QPushButton("Отмена")
+
+        buttons_layout.addWidget(self.cancel_button)
+        buttons_layout.addWidget(self.login_button)
+
+        notify_layout = QHBoxLayout()
+        self.notify_label = QLabel()
+        self.notify_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        notify_layout.addWidget(self.notify_label)
+
+        authorize_layout.addLayout(login_layout)
+        authorize_layout.addLayout(buttons_layout)
+        authorize_layout.addLayout(notify_layout)
+
+        self.login_button.clicked.connect(self.show_settings_window)
+        self.cancel_button.clicked.connect(self.close)
+
+    def show_settings_window(self):
+        password = self.password_line_edit.text()
+        veryfication_password = Run_Crypton_Functions(
+            5).smbconnect_to_crypton()
+        if password == veryfication_password:
+            self.close()
+            self.settings_window = SettingsWindow()
+            return self.password_line_edit.text()
+        else:
+            self.notify_label.setText("Неверный пароль!")
 
 
 class ShowInstalledLogListCertificate(QThread):
@@ -299,7 +473,7 @@ class DetailWindow(QWidget):
             found_cert.setHidden(
                 found_cert_name not in found_cert.text().lower())
 
-    @pyqtSlot(str)
+    @ pyqtSlot(str)
     def update_label(self, message):
         self.label.setText(message)
         self.update_timer.start(100)
@@ -307,7 +481,7 @@ class DetailWindow(QWidget):
     def perform_resize(self):
         self.adjustSize()
 
-    @pyqtSlot(str)
+    @ pyqtSlot(str)
     def update_list_for_setup_all_certificates(self, message):
         self.log_list.addItem(message)
 
@@ -321,6 +495,7 @@ class DetailWindow(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.setup_databes = db.DatabaseApp()
         self.initUI()
 
     def initUI(self):
@@ -381,8 +556,7 @@ class MainWindow(QWidget):
         if item.text() == "Удалить сертификат":
             self.detailWindow = DetailWindow(3)
         if item.text() == "Настройки":
-            self.settingsWindow = SettingsWindow()
-            self.settingsWindow.show()
+            self.authorize_window = SettingsAuthorizationWindow()
 
     def install_all_certs_password_verification(self):
         input_password = self.enterPasswordLine.text()

@@ -1,4 +1,5 @@
 import sqlite3
+import gui
 
 
 class DatabaseApp():
@@ -9,11 +10,13 @@ class DatabaseApp():
         self.conn = sqlite3.connect(
             '/home/user/crypton.db')
         self.cursor = self.conn.cursor()
+        self.notify_message = gui.MessageWindows()
 
         # Создаем таблицу, если она еще не существует
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS smbconnectconfig (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name_of_connection TEXT NOT NULL,
                 ipaddress TEXT NOT NULL,
                 username TEXT NOT NULL,
                 password TEXT NOT NULL,
@@ -24,23 +27,75 @@ class DatabaseApp():
             )
         ''')
 
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS active_connection (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+
+        self.cursor.execute(
+            "INSERT OR IGNORE INTO active_connection VALUES ('active_connection', '1')")
+
         # Пример данных в базе
         self.cursor.execute(
-            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "1.1.1.1", "user", "password", "domain", "server", "share", "/home/user")')
+            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "172.25.87.3", "cert_user", "cert2024", "SAMBA", "server-terminal", "обменник поликлиники", "/distr/certificates")')
         self.conn.commit()
 
-    def save_to_db(self, ipaddress, username, password, domainname, servername, sharename, folderpath):
-        # Сохраняем данные в базу
-        self.cursor.execute(
-            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, ?, ?, ?, ?, ?, ?, ?)', (ipaddress, username, password, domainname, servername, sharename, folderpath))
+    def save_to_db(self, name_of_connection, ipaddress, username, password, domainname, servername, sharename, folderpath):
         # Обновляем данные в базе
-        self.cursor.execute(
-            'UPDATE smbconnectconfig SET ipaddress=?, username=?, password=?, domainname=?, servername=?, sharename=?, folderpath=? WHERE id=1', (ipaddress, username, password, domainname, servername, sharename, folderpath))
+        self.cursor.execute("SELECT COUNT(*) FROM smbconnectconfig WHERE name_of_connection=? AND ipaddress=? AND username=? AND password=? AND domainname=? AND servername=? AND sharename=? AND folderpath=?",
+                            (name_of_connection, ipaddress, username, password, domainname, servername, sharename, folderpath))
+        existing_entry = self.cursor.fetchone()
+
+        if existing_entry[0] > 0:
+
+            self.notify_message.show_warning_message_ui(
+                "Ошибка. Такая запись уже существует!")
+
+            return False
+
+        else:
+            if (name_of_connection and ipaddress and username and password and domainname and servername and sharename and folderpath) == "":
+                self.notify_message.show_warning_message_ui(
+                    "Ошибка. Нельзя создать пустую запись")
+                return False
+            else:
+                self.cursor.execute('INSERT INTO smbconnectconfig (name_of_connection, ipaddress, username, password, domainname, servername, sharename, folderpath) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (
+                    name_of_connection, ipaddress, username, password, domainname, servername, sharename, folderpath))
+            self.notify_message.show_success_message_ui(
+                "Запись успешно добавлена!")
+        self.conn.commit()
+        return self.cursor.lastrowid
+
+    def save_active_connection(self, connection_id):
+        self.cursor.execute("""
+            INSERT INTO active_connection (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        """, ("active_connection", connection_id))
         self.conn.commit()
 
-    def select_from_db(self):
+    def load_active_connection(self):
+        self.cursor.execute(
+            "SELECT value FROM active_connection WHERE key = ?", ("active_connection",))
+        return self.cursor.fetchone()
+
+    def delete_from_db(self, connection_id):
+        # # Удаляем данные из базы
+        self.cursor.execute(
+            "DELETE FROM smbconnectconfig WHERE id=?", (connection_id,))
+
+        self.conn.commit()
+
+    def select_from_db(self, connection_id):
         # Выбираем данные из базы
-        self.cursor.execute('SELECT * FROM smbconnectconfig')
+        self.cursor.execute(
+            'SELECT * FROM smbconnectconfig WHERE id=?', (connection_id,))
+        return self.cursor.fetchone()
+
+    def update_combobox(self):
+        self.cursor.execute(
+            'SELECT id, name_of_connection FROM smbconnectconfig')
         return self.cursor.fetchall()
 
     def close_connection(self):
