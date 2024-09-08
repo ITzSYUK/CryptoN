@@ -29,4 +29,5 @@ python -m pip install pysmb pyqt6 pysqlite3
 
 ```
 python crypton.py
+or python main.py
 ```
