@@ -6,9 +6,183 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
 import sys
 import io
+import sqlite3
 
+
+class DatabaseApp():
+    def __init__(self):
+        super().__init__()
+
+        # Устанавливаем соединение с базой данных
+        self.conn = sqlite3.connect(
+            '/home/user/crypton.db')
+        self.cursor = self.conn.cursor()
+
+        # Создаем таблицу, если она еще не существует
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS smbconnectconfig (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ipaddress TEXT NOT NULL,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                domainname TEXT NOT NULL,
+                servername TEXT NOT NULL,
+                sharename TEXT NOT NULL,
+                folderpath TEXT NOT NULL
+            )
+        ''')
+
+        # Пример данных в базе
+        self.cursor.execute(
+            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "1.1.1.1", "user", "password", "domain", "server", "share", "/home/user")')
+        self.conn.commit()
+
+    def save_to_db(self, ipaddress, username, password, domainname, servername, sharename, folderpath):
+        # Обновляем данные в базе
+        if ipaddress:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET ipaddress=? WHERE id=1', (ipaddress,))
+        if username:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET username=? WHERE id=1', (username,))
+        if password:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET password=? WHERE id=1', (password,))
+        if domainname:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET domainname=? WHERE id=1', (domainname,))
+        if servername:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET servername=? WHERE id=1', (servername,))
+        if sharename:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET sharename=? WHERE id=1', (sharename,))
+        if folderpath:
+            self.cursor.execute(
+                'UPDATE smbconnectconfig SET folderpath=? WHERE id=1', (folderpath,))
+        # self.cursor.execute(
+        #     'UPDATE smbconnectconfig SET ipaddress=?, username=?, password=?, domainname=?, servername=?, sharename=?, folderpath=? WHERE id=1', (ipaddress, username, password, domainname, servername, sharename, folderpath))
+        self.conn.commit()
+
+    def select_from_db(self):
+        # Выбираем данные из базы
+        self.cursor.execute('SELECT * FROM smbconnectconfig')
+        return self.cursor.fetchall()
+
+    def close_connection(self):
+        self.conn.close()
+
+
+class SettingsWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setStyleSheet("""
+            QLineEdit {
+                min-width: 400px;
+                max-width: 400px;
+                height: 30px;
+            },
+        """)
+        self.setupUi()
+        self.show()
+
+    def setupUi(self):
+        self.setWindowTitle('Настройки')
+        self.resize(500, 300)
+        placeholder = DatabaseApp().select_from_db()
+
+        main_layout = QVBoxLayout()
+        # IP Layout
+        ip_layout = QHBoxLayout()
+        self.ip_line_text = QLabel('IP:')
+        self.ip_line_edit = QLineEdit()
+        self.ip_line_edit.setPlaceholderText(placeholder[0][1])
+        ip_layout.addWidget(self.ip_line_text)
+        ip_layout.addWidget(self.ip_line_edit)
+
+        # Username Layout
+        username_layout = QHBoxLayout()
+        self.username_line_text = QLabel('Username:')
+        self.username_line_edit = QLineEdit()
+        self.username_line_edit.setPlaceholderText(placeholder[0][2])
+        username_layout.addWidget(self.username_line_text)
+        username_layout.addWidget(self.username_line_edit)
+
+        # Password Layout
+        password_layout = QHBoxLayout()
+        self.password_line_text = QLabel('Password:')
+        self.password_line_edit = QLineEdit()
+        self.password_line_edit.setPlaceholderText(placeholder[0][3])
+        password_layout.addWidget(self.password_line_text)
+        password_layout.addWidget(self.password_line_edit)
+
+        # Domain name Layout
+        domain_name_layout = QHBoxLayout()
+        self.domain_name_line_text = QLabel('Domain name:')
+        self.domain_name_line_edit = QLineEdit()
+        self.domain_name_line_edit.setPlaceholderText(placeholder[0][4])
+        domain_name_layout.addWidget(self.domain_name_line_text)
+        domain_name_layout.addWidget(self.domain_name_line_edit)
+
+        # Server name Layout
+        server_name_layout = QHBoxLayout()
+        self.server_name_line_text = QLabel('Server name:')
+        self.server_name_line_edit = QLineEdit()
+        self.server_name_line_edit.setPlaceholderText(placeholder[0][5])
+        server_name_layout.addWidget(self.server_name_line_text)
+        server_name_layout.addWidget(self.server_name_line_edit)
+
+        # Sharename Layout
+        sharename_layout = QHBoxLayout()
+        self.sharename_line_text = QLabel('Sharename:')
+        self.sharename_line_edit = QLineEdit()
+        self.sharename_line_edit.setPlaceholderText(placeholder[0][6])
+        sharename_layout.addWidget(self.sharename_line_text)
+        sharename_layout.addWidget(self.sharename_line_edit)
+
+        # Folder path Layout
+        folder_path_layout = QHBoxLayout()
+        self.folder_path_line_text = QLabel('Folder path:')
+        self.folder_path_line_edit = QLineEdit()
+        self.folder_path_line_edit.setPlaceholderText(placeholder[0][7])
+        folder_path_layout.addWidget(self.folder_path_line_text)
+        folder_path_layout.addWidget(self.folder_path_line_edit)
+
+        # Save Button Layout
+        save_button_layout = QHBoxLayout()
+        self.save_button = QPushButton('Сохранить')
+        self.save_button.setFixedSize(300, 30)
+        save_button_layout.addWidget(self.save_button)
+
+        self.save_button.clicked.connect(self.save_settings)
+
+        main_layout.addLayout(ip_layout)
+        main_layout.addLayout(username_layout)
+        main_layout.addLayout(password_layout)
+        main_layout.addLayout(domain_name_layout)
+        main_layout.addLayout(server_name_layout)
+        main_layout.addLayout(sharename_layout)
+        main_layout.addLayout(folder_path_layout)
+        main_layout.addLayout(save_button_layout)
+
+        self.setLayout(main_layout)
+
+    def save_settings(self):
+        DatabaseApp().save_to_db(
+            self.ip_line_edit.text(),
+            self.username_line_edit.text(),
+            self.password_line_edit.text(),
+            self.domain_name_line_edit.text(),
+            self.server_name_line_edit.text(),
+            self.sharename_line_edit.text(),
+            self.folder_path_line_edit.text(),
+        )
+        self.close()
 
 # Класс ShowInstalledLogListCertificate нужен для запуска окна со списком логов установленных сертификатов в отдельном потоке. Это нужно для того, чтобы окно логов открывалось до начала работы метода по установке сертификатов.
+
+
 class ShowInstalledLogListCertificate(QThread):
     certificate_installed = pyqtSignal(str)
 
@@ -227,7 +401,7 @@ class MainWindow(QWidget):
         self.listWidget.setFont(self.font())
 
         items = ["Установить отдельный сертификат",
-                 "Установить все сертификаты", "Удалить сертификат"]
+                 "Установить все сертификаты", "Удалить сертификат", "Настройки"]
         for item in items:
             QListWidgetItem(item, self.listWidget)
         self.listWidget.itemDoubleClicked.connect(self.showDetailWindow)
@@ -282,6 +456,8 @@ class MainWindow(QWidget):
                 self.install_all_certs_password_verification)
         if item.text() == "Удалить сертификат":
             self.detailWindow = DetailWindow(3)
+        if item.text() == "Настройки":
+            self.settingsWindow = SettingsWindow()
 
     # def install_one_cert_password_verification(self):
     #     input_password = self.enterPasswordLine.text()
@@ -292,22 +468,28 @@ class MainWindow(QWidget):
         input_password = self.enterPasswordLine.text()
         self.password_checker = DetailWindow(2, input_password)
 
+    def closeEvent(self, event):
+        # Закрываем соединение с базой данных перед закрытием приложения
+        self.close_conn = DatabaseApp().close_connection()
+        event.accept()  # Завершаем закрытие окна
+
 
 class Run_Crypton_Functions:
     def __init__(self, type=0, signal=None):
         self.type = type
         self.signal = signal
+        self.smb_settings_from_db = DatabaseApp().select_from_db()
 
     def smbconnect_to_crypton(self, surname=None):
         with CRYPTON(
-            server_ip="172.25.87.3",
-            share_name="обменник поликлиники",
-            folder_path="distr/certificates",
-            username="cert_user",
-            password="cert2024",
+            server_ip=self.smb_settings_from_db[0][1],
+            share_name=self.smb_settings_from_db[0][6],
+            folder_path=self.smb_settings_from_db[0][7],
+            username=self.smb_settings_from_db[0][2],
+            password=self.smb_settings_from_db[0][3],
             client_machine_name="client_machine_name",
-            server_name="server-terminal",
-            domain_name="SAMBA",
+            server_name=self.smb_settings_from_db[0][5],
+            domain_name=self.smb_settings_from_db[0][4],
             local_download_path="/var/opt/cprocsp/keys/user/",
             password_file_path="/distr/certs_password.txt",
             surname=surname,
