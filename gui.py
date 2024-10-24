@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout, QComboBox, QMessageBox, QCompleter
-from PyQt6.QtGui import QFont, QStandardItemModel, QStandardItem
+from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
 from smb_connection import Run_Crypton_Functions
 import crypton_database as db
+import os
 
 
 class MessageWindows(QWidget):
@@ -47,7 +48,7 @@ class SettingsWindow(QWidget):
         # List of connections
         list_of_connections_layout = QHBoxLayout()
         font_for_list_of_connections = QFont()
-        font_for_list_of_connections.setPointSize(8)
+        font_for_list_of_connections.setPointSize(10)
         self.list_of_connections_widget = QComboBox(self)
         self.list_of_connections_widget.setFont(font_for_list_of_connections)
         # self.list_of_connections_widget.setFixedWidth(400)
@@ -107,11 +108,29 @@ class SettingsWindow(QWidget):
         sharename_layout.addWidget(self.sharename_line_edit)
 
         # Folder path Layout
-        folder_path_layout = QHBoxLayout()
-        self.folder_path_line_text = QLabel('Folder path:')
-        self.folder_path_line_edit = QLineEdit()
-        folder_path_layout.addWidget(self.folder_path_line_text)
-        folder_path_layout.addWidget(self.folder_path_line_edit)
+        remote_certs_path_layout = QHBoxLayout()
+        self.remote_certs_path_line_text = QLabel('Remote certs path:')
+        self.remote_certs_path_line_edit = QLineEdit()
+        remote_certs_path_layout.addWidget(self.remote_certs_path_line_text)
+        remote_certs_path_layout.addWidget(self.remote_certs_path_line_edit)
+
+        # Local Download Path Layout
+        local_download_path_layout = QHBoxLayout()
+        self.local_download_path_line_text = QLabel('Local certs path:')
+        self.local_download_path_line_edit = QLineEdit()
+        local_download_path_layout.addWidget(
+            self.local_download_path_line_text)
+        local_download_path_layout.addWidget(
+            self.local_download_path_line_edit)
+
+        # Remote password file path Layout
+        remote_password_path_layout = QHBoxLayout()
+        self.remote_password_path_line_text = QLabel('Password file path:')
+        self.remote_password_path_line_edit = QLineEdit()
+        remote_password_path_layout.addWidget(
+            self.remote_password_path_line_text)
+        remote_password_path_layout.addWidget(
+            self.remote_password_path_line_edit)
 
         # Save, Delete and Connect Button Layout
         buttons_layout = QHBoxLayout()
@@ -137,7 +156,9 @@ class SettingsWindow(QWidget):
         main_layout.addLayout(domain_name_layout)
         main_layout.addLayout(server_name_layout)
         main_layout.addLayout(sharename_layout)
-        main_layout.addLayout(folder_path_layout)
+        main_layout.addLayout(remote_certs_path_layout)
+        main_layout.addLayout(local_download_path_layout)
+        main_layout.addLayout(remote_password_path_layout)
         main_layout.addLayout(buttons_layout)
 
         self.setLayout(main_layout)
@@ -153,7 +174,9 @@ class SettingsWindow(QWidget):
             self.domain_name_line_edit.text(),
             self.server_name_line_edit.text(),
             self.sharename_line_edit.text(),
-            self.folder_path_line_edit.text(),
+            self.remote_certs_path_line_edit.text(),
+            self.local_download_path_line_edit.text(),
+            self.remote_password_path_line_edit.text(),
         )
         if result is False:
             return
@@ -200,7 +223,11 @@ class SettingsWindow(QWidget):
                 self.domain_name_line_edit.setText(current_connection[5])
                 self.server_name_line_edit.setText(current_connection[6])
                 self.sharename_line_edit.setText(current_connection[7])
-                self.folder_path_line_edit.setText(current_connection[8])
+                self.remote_certs_path_line_edit.setText(current_connection[8])
+                self.local_download_path_line_edit.setText(
+                    current_connection[9])
+                self.remote_password_path_line_edit.setText(
+                    current_connection[10])
 
     def connect_to_server(self):
         # Получаем ID выбранной записи
@@ -208,7 +235,9 @@ class SettingsWindow(QWidget):
         if connection_index >= 0:
             connection_id = self.list_of_connections_widget.itemData(
                 connection_index)
-            db.DatabaseApp().save_active_connection(connection_id)
+            connection_status = db.DatabaseApp().save_active_connection(connection_id)
+            if connection_status is False:
+                return
             self.notify_message.show_success_message_ui(
                 "Активное подключение установлено!")
 
@@ -227,7 +256,9 @@ class SettingsWindow(QWidget):
             self.domain_name_line_edit.setText(connection[5])
             self.server_name_line_edit.setText(connection[6])
             self.sharename_line_edit.setText(connection[7])
-            self.folder_path_line_edit.setText(connection[8])
+            self.remote_certs_path_line_edit.setText(connection[8])
+            self.local_download_path_line_edit.setText(connection[9])
+            self.remote_password_path_line_edit.setText(connection[10])
             index = self.list_of_connections_widget.findText(connection[1])
             if index >= 0:
                 self.list_of_connections_widget.setCurrentIndex(index)
@@ -277,8 +308,9 @@ class SettingsAuthorizationWindow(QWidget):
 
     def show_settings_window(self):
         password = self.password_line_edit.text()
-        veryfication_password = Run_Crypton_Functions(
-            5).smbconnect_to_crypton()
+        # veryfication_password = Run_Crypton_Functions(
+        #     5).smbconnect_to_crypton()
+        veryfication_password = Run_Crypton_Functions().open_settings_window_connection()
         if password == veryfication_password:
             self.close()
             self.settings_window = SettingsWindow()
@@ -331,6 +363,8 @@ class DetailWindow(QWidget):
         layout.addWidget(self.search_certificate_line)
         layout.addWidget(self.listWidget)
         items = Run_Crypton_Functions().smbconnect_to_crypton()
+        if items is None:
+            return
 
         authorize_setup_cert_layout = QHBoxLayout()
         self.authorize_setup_cert_line = QLineEdit()
@@ -350,7 +384,7 @@ class DetailWindow(QWidget):
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setFont(self.font())
         self.label.setWordWrap(True)
-        self.label.setMaximumHeight(102)
+        self.label.setMinimumHeight(40)
         notify_layout.addWidget(self.label)
         layout.addLayout(notify_layout)
 
@@ -366,6 +400,8 @@ class DetailWindow(QWidget):
         self.certificate_installed.connect(self.update_label)
         self.search_certificate_line.textChanged.connect(
             self.filter_certificate_list)
+
+        self.show()
 
     def download_one_sertificate(self, item=None, password=None):
         password = self.authorize_setup_cert_line.text()
@@ -428,9 +464,13 @@ class DetailWindow(QWidget):
         layout.addWidget(self.del_cert_list)
         layout.addWidget(self.delete_button)
         layout.addWidget(self.label)
-        cert_list = Run_Crypton_Functions(
-            3).smbconnect_to_crypton()
-        cert_list.pop()
+        # cert_list = Run_Crypton_Functions(
+        #     3).smbconnect_to_crypton()
+        cert_list = Run_Crypton_Functions(3).nonsmb_functions()
+        if cert_list == []:
+            MessageWindows().show_warning_message_ui("Нет установленных сертификатов")
+            return
+        # cert_list.pop()
         for item in cert_list:
             QListWidgetItem(item, self.del_cert_list)
         self.del_cert_list.itemDoubleClicked.connect(
@@ -449,14 +489,17 @@ class DetailWindow(QWidget):
         if selected_item:
             delete_sertificate_by_button = Run_Crypton_Functions(
                 4, self.certificate_installed)
-            delete_sertificate_by_button.smbconnect_to_crypton(
+            # delete_sertificate_by_button.smbconnect_to_crypton(
+            #     selected_item[0].text())
+            delete_sertificate_by_button.nonsmb_functions(
                 selected_item[0].text())
             self.remove_certificate_name_from_list()
         elif item:
             delete_sertificate_by_double_click = Run_Crypton_Functions(
                 4, self.certificate_installed)
-            delete_sertificate_by_double_click.smbconnect_to_crypton(
-                item.text())
+            # delete_sertificate_by_double_click.smbconnect_to_crypton(
+            #     item.text())
+            delete_sertificate_by_double_click.nonsmb_functions(item.text())
             self.remove_certificate_name_from_list()
         else:
             self.certificate_installed.emit("Сертификат не выбран")
@@ -495,6 +538,7 @@ class DetailWindow(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.setWindowIcon(QIcon('C:\\Users\\vboxuser\\crypton\\icon.ico'))
         self.setup_databes = db.DatabaseApp()
         self.initUI()
 
@@ -513,7 +557,7 @@ class MainWindow(QWidget):
         self.main_window_certificates_layout.addWidget(self.listWidget)
         self.setLayout(self.main_window_certificates_layout)
         self.setWindowTitle(
-            'Специальный установщик криптографических алгоритмов')
+            'Система управления криптографическими алгоритмами')
         self.setFixedWidth(570)
 
         # Создание пустого множества для проверки нажатия на элементы списка главного окна
@@ -543,7 +587,7 @@ class MainWindow(QWidget):
     def showDetailWindow(self, item):
         if item.text() == "Установить отдельный сертификат":
             self.detailWindow = DetailWindow(1)
-            self.detailWindow.show()
+            # self.detailWindow.show()
         # Условие, при котором проверяется, была ли нажата кнопка "Установить все сертификаты" и проверяется наличие элемента в множестве clicked_items
         if item.text() == "Установить все сертификаты" and len(self.clicked_items_main_window) in [0, 1]:
             self.authorize_widget()
