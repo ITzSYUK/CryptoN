@@ -9,7 +9,6 @@ class DatabaseApp():
         super().__init__()
         USERNAME = getuser()
         db_path = f'C:/Users/{USERNAME}/crypton.db'
-        local_download_path = 'V:\\'
         # Устанавливаем соединение с базой данных
         self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
@@ -44,7 +43,7 @@ class DatabaseApp():
 
         # Данные по умолчанию
         self.cursor.execute(
-            f'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "172.25.87.3", "cert_user", "cert2024", "SAMBA", "server-terminal", "обменник поликлиники", "/distr/certificates", "{local_download_path}", "/distr/certs_password.txt")')
+            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "172.25.87.3", "cert_user", "cert2024", "SAMBA", "server-terminal", "обменник поликлиники", "/distr/certificates", "V:\\", "/distr/certs_password.txt")')
         self.conn.commit()
 
     def save_to_db(self, name_of_connection, ipaddress, username, password, domainname, servername, sharename, remote_cert_path, local_download_path, password_path):

@@ -115,23 +115,32 @@ class SMBConnectionManager:
             # Извлечение русского ФИО из контейнера сертификата
             rus_name_pattern = re.findall(
                 r'[\u0400-\u04FF]+', matching_lines[0])
-            self.signal.emit(
-                "Не удалось связать сертификат пользователя с контейнером. Идентификатор контейнера не найден.")
             # Создание переменной для хранения русского ФИО и годов выдачи и истечения для создания контейнера в реестре Windows
             container_name_with_dates = rus_name_pattern + \
                 [issued_year, expires_year]
 
-            # Копирование закрытого ключа в реестр
-            result = subprocess.run(f'"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keycopy -contsrc "{matching_lines[0]}" -contdest "\\\\.\\REGISTRY\\{{''.join(container_name_with_dates)}}"',
-                                    shell=True,
-                                    check=True,
-                                    capture_output=True,
-                                    text=True,
-                                    encoding='cp866'
-                                    )
+            # Проверка наличия контейнера в реестре
+            check_install_container = subprocess.run(
+                f'"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keyset -enum_cont -fqcn -verifyc | findstr /C:"{"".join(container_name_with_dates)}"',
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding='cp866'
+            )
+            if check_install_container.returncode == 1:
+                # Копирование закрытого ключа в реестр
+                result = subprocess.run(
+                    f'"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keycopy -contsrc "{matching_lines[0]}" -contdest "\\\\.\\REGISTRY\\{''.join(container_name_with_dates)}"',
+                    shell=True,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding='cp866'
+                )
             # Установка сертификата
             result = subprocess.run(
-                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -inst -file "{local_file_path}" -cont "\\\\.\\REGISTRY\\{{''.join(container_name_with_dates)}}"',  # noqa
+                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -inst -file "{local_file_path}" -cont "\\\\.\\REGISTRY\\{''.join(container_name_with_dates)}"',  # noqa
                 shell=True,
                 check=True,
                 capture_output=True,
@@ -205,8 +214,7 @@ class SMBConnectionManager:
         user_name = user_name.split(" | ", 1)[0]
         # Находим идентификатор ключа для указанного пользователя
         result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -list | findstr /C:"{
-                user_name}" /C:"Идентификатор ключа : " /C:"Контейнер           : REGISTRY\\\\',
+            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -list | findstr /C:"{user_name}" /C:"Идентификатор ключа : " /C:"Контейнер           : REGISTRY\\\\', # noqa
             shell=True,
             check=True,
             capture_output=True,
@@ -305,7 +313,7 @@ class Run_Crypton_Functions:
 
     def nonsmb_functions(self, surname=None):
         if self.type == 3:
-            return SMBConnectionManager.list_of_installed_certificates_win()
+            return SMBConnectionManager.list_of_installed_certificates_win(self)
         if self.type == 4:
             SMBConnectionManager.delete_certificate_method_win(
                 self, surname)
