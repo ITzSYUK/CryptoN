@@ -1,6 +1,5 @@
 import sqlite3
 import gui
-import os
 from getpass import getuser
 import subprocess
 
@@ -86,7 +85,8 @@ class DatabaseApp():
         connection_data = self.cursor.fetchall()
         try:
             result = subprocess.run(
-                f'smbclient -L {connection_data[0][0]} -U {connection_data[0][1]}%{connection_data[0][2]} | grep "{connection_data[0][3]}"',
+                f'smbclient -L {connection_data[0][0]} -U {connection_data[0][1]}%{
+                    connection_data[0][2]} | grep "{connection_data[0][3]}"',
                 shell=True,
                 check=True,
                 capture_output=True,

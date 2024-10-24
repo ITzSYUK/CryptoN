@@ -1,9 +1,8 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout, QComboBox, QMessageBox, QCompleter
 from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
-from smb_connection import Run_Crypton_Functions
-import crypton_database as db
-import os
+from smb_connection_win import Run_Crypton_Functions
+import crypton_database_win as db
 
 
 class MessageWindows(QWidget):
@@ -41,7 +40,6 @@ class SettingsWindow(QWidget):
     def setupUi(self):
         self.setWindowTitle('Настройки')
         self.resize(500, 300)
-        # placeholder = db.DatabaseApp().select_from_db()
 
         main_layout = QVBoxLayout()
 
@@ -51,7 +49,6 @@ class SettingsWindow(QWidget):
         font_for_list_of_connections.setPointSize(10)
         self.list_of_connections_widget = QComboBox(self)
         self.list_of_connections_widget.setFont(font_for_list_of_connections)
-        # self.list_of_connections_widget.setFixedWidth(400)
         list_of_connections_layout.addWidget(self.list_of_connections_widget)
         self.update_combobox_list()
         self.list_of_connections_widget.currentIndexChanged.connect(
@@ -308,8 +305,6 @@ class SettingsAuthorizationWindow(QWidget):
 
     def show_settings_window(self):
         password = self.password_line_edit.text()
-        # veryfication_password = Run_Crypton_Functions(
-        #     5).smbconnect_to_crypton()
         veryfication_password = Run_Crypton_Functions().open_settings_window_connection()
         if password == veryfication_password:
             self.close()
@@ -464,13 +459,10 @@ class DetailWindow(QWidget):
         layout.addWidget(self.del_cert_list)
         layout.addWidget(self.delete_button)
         layout.addWidget(self.label)
-        # cert_list = Run_Crypton_Functions(
-        #     3).smbconnect_to_crypton()
         cert_list = Run_Crypton_Functions(3).nonsmb_functions()
         if cert_list == []:
             MessageWindows().show_warning_message_ui("Нет установленных сертификатов")
             return
-        # cert_list.pop()
         for item in cert_list:
             QListWidgetItem(item, self.del_cert_list)
         self.del_cert_list.itemDoubleClicked.connect(
@@ -489,16 +481,12 @@ class DetailWindow(QWidget):
         if selected_item:
             delete_sertificate_by_button = Run_Crypton_Functions(
                 4, self.certificate_installed)
-            # delete_sertificate_by_button.smbconnect_to_crypton(
-            #     selected_item[0].text())
             delete_sertificate_by_button.nonsmb_functions(
                 selected_item[0].text())
             self.remove_certificate_name_from_list()
         elif item:
             delete_sertificate_by_double_click = Run_Crypton_Functions(
                 4, self.certificate_installed)
-            # delete_sertificate_by_double_click.smbconnect_to_crypton(
-            #     item.text())
             delete_sertificate_by_double_click.nonsmb_functions(item.text())
             self.remove_certificate_name_from_list()
         else:
@@ -587,7 +575,6 @@ class MainWindow(QWidget):
     def showDetailWindow(self, item):
         if item.text() == "Установить отдельный сертификат":
             self.detailWindow = DetailWindow(1)
-            # self.detailWindow.show()
         # Условие, при котором проверяется, была ли нажата кнопка "Установить все сертификаты" и проверяется наличие элемента в множестве clicked_items
         if item.text() == "Установить все сертификаты" and len(self.clicked_items_main_window) in [0, 1]:
             self.authorize_widget()

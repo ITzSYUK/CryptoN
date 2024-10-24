@@ -2,7 +2,7 @@ import os
 import io
 import subprocess
 from smb.SMBConnection import SMBConnection
-import crypton_database as db
+import crypton_database_win as db
 import gui
 import re
 
@@ -77,7 +77,8 @@ class SMBConnectionManager:
     def setup_sertificate_win(self, local_file_path, local_file_name):
         # Получение информации о сертификате
         result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list -file "{local_file_path}"',
+            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list -file "{
+                local_file_path}"',
             shell=True,
             check=True,
             capture_output=True,
@@ -188,7 +189,8 @@ class SMBConnectionManager:
 
                 # Добавляем текущий сертификат в список с номером строки
                 if "CN" in current_certificate and "Expiration" in current_certificate:
-                    cert_info = f"{number_of_lines}: {current_certificate['CN']} | Истекает: {current_certificate['Expiration']}"
+                    cert_info = f"{number_of_lines}: {current_certificate['CN']} | Истекает: {
+                        current_certificate['Expiration']}"
                     list_of_certificates.append(cert_info)
                     number_of_lines += 1
 
@@ -203,7 +205,8 @@ class SMBConnectionManager:
         user_name = user_name.split(" | ", 1)[0]
         # Находим идентификатор ключа для указанного пользователя
         result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -list | findstr /C:"{user_name}" /C:"Идентификатор ключа : " /C:"Контейнер           : REGISTRY\\\\',
+            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -list | findstr /C:"{
+                user_name}" /C:"Идентификатор ключа : " /C:"Контейнер           : REGISTRY\\\\',
             shell=True,
             check=True,
             capture_output=True,
@@ -223,7 +226,8 @@ class SMBConnectionManager:
 
         # Удаляем сертификат
         result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -certificate -keyid {key_identifier}',
+            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -certificate -keyid {
+                key_identifier}',
             shell=True,
             check=True,
             capture_output=True,
@@ -232,7 +236,8 @@ class SMBConnectionManager:
         try:
             # Удаляем закрытый контейнер из реестра
             result = subprocess.run(
-                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -container "\\\\.\\REGISTRY\\{container_name_with_dates}"',
+                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -container "\\\\.\\REGISTRY\\{
+                    container_name_with_dates}"',
                 shell=True,
                 check=True,
                 capture_output=True,
