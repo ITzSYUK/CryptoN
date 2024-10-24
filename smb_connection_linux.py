@@ -2,7 +2,7 @@ import os
 import io
 import subprocess
 from smb.SMBConnection import SMBConnection
-import crypton_database as db
+import crypton_database_linux as db
 import gui
 import re
 
