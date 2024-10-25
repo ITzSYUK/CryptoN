@@ -1,14 +1,10 @@
 # Crypton
 
 
-
-## Getting started
+## Copy repo
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/ITzSYUK/crypton.git
-git branch -M main
-git push -uf origin main
+git clone https://gitlab.com/ITzSYUK/crypton.git -b dev_windows
 ```
 
 ## Creating Python virtual environment
@@ -16,18 +12,23 @@ git push -uf origin main
 ```
 pythom -m venv crypton
 cd crypton
-source ./bin/activate
+.\Scripts\activate
 ```
 
 ## Dependency installation
 
 ```
-python -m pip install pysmb pyqt6 pysqlite3
+python -m pip install pysmb pyqt6 pysqlite3 pyinstaller
 ```
 
 ## Program startup
 
 ```
-python crypton.py
-or python main.py
+python main_win.py # (as administrator)
+```
+
+## Program compilation
+
+```
+python -m PyInstaller -F -w --name crypton main_win.py
 ```
