@@ -1,12 +1,15 @@
 import sqlite3
 import gui
+<<<<<<< HEAD
+=======
+import subprocess
+>>>>>>> c0ac87ab486794a5c1dc64bae8a2787cf20097fc
 
 
 class DatabaseApp():
     def __init__(self):
         super().__init__()
         db_path = '/home/user/crypton.db'
-        local_download_path = '/var/opt/cprocsp/keys/user/'
         # Устанавливаем соединение с базой данных
         self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
@@ -41,7 +44,7 @@ class DatabaseApp():
 
         # Данные по умолчанию
         self.cursor.execute(
-            f'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "192.168.0.104", "Dovakin23", "1337", "WORKGROUP", "itzsy-pc", "OS", "certificates", "{local_download_path}", "certs_password.txt")')
+            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "172.25.87.3", "cert_user", "cert2024", "SAMBA", "server-terminal", "обменник поликлиники", "/distr/certificates", "/var/opt/cprocsp/keys/user/", "/distr/certs_password.txt")')
         self.conn.commit()
 
     def save_to_db(self, name_of_connection, ipaddress, username, password, domainname, servername, sharename, remote_cert_path, local_download_path, password_path):
@@ -77,11 +80,37 @@ class DatabaseApp():
         return self.cursor.lastrowid
 
     def save_active_connection(self, connection_id):
+<<<<<<< HEAD
         self.cursor.execute("""
             INSERT INTO active_connection (key, value) VALUES (?, ?)
             ON CONFLICT(key) DO UPDATE SET value=excluded.value
         """, ("active_connection", connection_id))
         self.conn.commit()
+=======
+        self.cursor.execute(
+            "SELECT ipaddress, username, password, sharename FROM smbconnectconfig WHERE id=?", (connection_id,))
+        connection_data = self.cursor.fetchall()
+        try:
+            result = subprocess.run(
+                f'smbclient -L {connection_data[0][0]} -U {connection_data[0][1]}%{connection_data[0][2]} | grep "{connection_data[0][3]}"',  # noqa
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                self.cursor.execute("""
+                    INSERT INTO active_connection (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """, ("active_connection", connection_id))
+                self.conn.commit()
+
+        except subprocess.CalledProcessError:
+            self.notify_message.show_warning_message_ui(
+                "Нет соединения с удаленным сервером!")
+            return False
+>>>>>>> c0ac87ab486794a5c1dc64bae8a2787cf20097fc
 
     def load_active_connection(self):
         self.cursor.execute(
