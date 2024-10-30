@@ -43,7 +43,7 @@ class DatabaseApp():
 
         # Данные по умолчанию
         self.cursor.execute(
-            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "172.25.87.3", "cert_user", "cert2024", "SAMBA", "server-terminal", "обменник поликлиники", "/distr/certificates", "V:\\", "/distr/certs_password.txt")')
+            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "192.168.0.100", "username", "password", "SAMBA", "server-terminal", "sharename", "/distr/certificates", "V:\\", "/distr/certs_password.txt")')
         self.conn.commit()
 
     def save_to_db(self, name_of_connection, ipaddress, username, password, domainname, servername, sharename, remote_cert_path, local_download_path, password_path):
