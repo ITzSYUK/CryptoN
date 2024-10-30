@@ -1,7 +1,5 @@
 import sqlite3
 import gui
-import os
-import subprocess
 
 
 class DatabaseApp():
@@ -79,30 +77,11 @@ class DatabaseApp():
         return self.cursor.lastrowid
 
     def save_active_connection(self, connection_id):
-        self.cursor.execute(
-            "SELECT ipaddress, username, password, sharename FROM smbconnectconfig WHERE id=?", (connection_id,))
-        connection_data = self.cursor.fetchall()
-        try:
-            result = subprocess.run(
-                f'smbclient -L {connection_data[0][0]} -U {connection_data[0][1]}%{
-                    connection_data[0][2]} | grep "{connection_data[0][3]}"',
-                shell=True,
-                check=True,
-                capture_output=True,
-                text=True
-            )
-
-            if result.returncode == 0:
-                self.cursor.execute("""
-                    INSERT INTO active_connection (key, value) VALUES (?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value=excluded.value
-                """, ("active_connection", connection_id))
-                self.conn.commit()
-
-        except subprocess.CalledProcessError:
-            self.notify_message.show_warning_message_ui(
-                "Нет соединения с удаленным сервером!")
-            return False
+        self.cursor.execute("""
+            INSERT INTO active_connection (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        """, ("active_connection", connection_id))
+        self.conn.commit()
 
     def load_active_connection(self):
         self.cursor.execute(

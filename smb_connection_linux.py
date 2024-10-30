@@ -2,9 +2,9 @@ import os
 import io
 import subprocess
 from smb.SMBConnection import SMBConnection
+from smb import smb_structs, base
 import crypton_database_linux as db
 import gui
-import re
 
 
 class SMBConnectionManager:
@@ -183,61 +183,45 @@ class Run_Crypton_Functions:
     def __init__(self, type=0, signal=None):
         self.type = type
         self.signal = signal
-        self.active_connection_id = db.DatabaseApp().load_active_connection()
-        self.connection = db.DatabaseApp().select_from_db(
-            self.active_connection_id[0])
-        self.default_connection = db.DatabaseApp().load_default_connection()
 
-    def open_settings_window_connection(self):
-        try:
-            with SMBConnectionManager(
-                server_ip=self.default_connection[2],
-                share_name=self.default_connection[7],
-                folder_path=self.default_connection[8],
-                username=self.default_connection[3],
-                password=self.default_connection[4],
-                client_machine_name="client_machine_name",
-                server_name=self.default_connection[6],
-                domain_name=self.default_connection[5],
-                local_download_path=self.default_connection[9],
-                password_file_path=self.default_connection[10],
-                signal=self.signal
-            ) as smb_connect:
-                return smb_connect.open_password_file()
-        except OSError:
-            gui.MessageWindows().show_warning_message_ui(
-                "Соединение с SMB-сервером разорвано.")
 
     def nonsmb_functions(self, surname=None):
         if self.type == 3:
-            return SMBConnectionManager.list_of_installed_certificates_linux(self)
+            return SMBConnectionManager.list_of_installed_certificates_win(self)
         if self.type == 4:
-            SMBConnectionManager.delete_certificate_method_linux(
+            SMBConnectionManager.delete_certificate_method_win(
                 self, surname)
 
-    def smbconnect_to_crypton(self, surname=None):
+    def smbconnect_to_crypton(self, connection_id=None, surname=None):
+        if connection_id is None:
+            self.active_connection_id = db.DatabaseApp().load_active_connection()
+            self.active_connection = db.DatabaseApp().select_from_db(
+                self.active_connection_id[0])
+        else:
+            self.active_connection = db.DatabaseApp().select_from_db(connection_id)
         try:
             with SMBConnectionManager(
-                server_ip=self.connection[2],
-                share_name=self.connection[7],
-                folder_path=self.connection[8],
-                username=self.connection[3],
-                password=self.connection[4],
+                server_ip=self.active_connection[2],
+                share_name=self.active_connection[7],
+                folder_path=self.active_connection[8],
+                username=self.active_connection[3],
+                password=self.active_connection[4],
                 client_machine_name="client_machine_name",
-                server_name=self.connection[6],
-                domain_name=self.connection[5],
-                local_download_path=self.connection[9],
-                password_file_path=self.connection[10],
+                server_name=self.active_connection[6],
+                domain_name=self.active_connection[5],
+                local_download_path=self.active_connection[9],
+                password_file_path=self.active_connection[10],
                 surname=surname,
                 signal=self.signal
             ) as smb_connect:
                 if self.type == 1:
-                    smb_connect.search_and_download()
+                    return smb_connect.search_and_download()
                 if self.type == 2:
                     smb_connect.install_all_certificates()
                 if self.type == 5:
                     return smb_connect.open_password_file()
                 return smb_connect.list_folders()
-        except OSError:
+        except (ConnectionRefusedError, smb_structs.OperationFailure, AssertionError, base.NotConnectedError):
             gui.MessageWindows().show_warning_message_ui(
-                "Не удалось подключиться к SMB-серверу.\nПроверьте данные подключения.")
+                "Не удалось подключиться к SMB-серверу.\nПроверьте интернет соединение или настройки подключения.")
+            return None
