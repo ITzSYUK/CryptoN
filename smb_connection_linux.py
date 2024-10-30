@@ -117,17 +117,31 @@ class SMBConnectionManager:
         os.popen("rm -rf /var/opt/cprocsp/keys/user/*")
 
     def list_of_installed_certificates_linux(self):
-        with os.popen(rf"/opt/cprocsp/bin/amd64/certmgr -list | grep -E 'Субъект|Истекает' | sed -n 's/.*CN=\(.*\)/\1/p; s/.*Истекает\s*:\s*/ | Истекает: /p' | paste -d '' - - ") as stream:  # noqa
-            output = stream.read()
+        try:
+            with os.popen(rf"/opt/cprocsp/bin/amd64/certmgr -list | grep -E 'Субъект|Истекает' | sed -n 's/.*CN=\(.*\)/\1/p; s/.*Истекает\s*:\s*/ | Истекает: /p' | paste -d '' - - ") as output:  # noqa
+                result = output.read()
 
-        list_of_installed_certificates = output.split('\n')
-        list_of_installed_certificates_with_numbers = []
-        number_of_lines = 1
-        for line in list_of_installed_certificates:
-            line = f"{number_of_lines}: {line}"
-            number_of_lines += 1
-            list_of_installed_certificates_with_numbers.append(line)
-        return list_of_installed_certificates_with_numbers[:-1]
+            list_of_installed_certificates = result.split('\n')
+            list_of_installed_certificates_with_numbers = []
+            number_of_lines = 1
+            for line in list_of_installed_certificates:
+                line = f"{number_of_lines}: {line}"
+                number_of_lines += 1
+                list_of_installed_certificates_with_numbers.append(line)
+
+            if list_of_installed_certificates_with_numbers[:-1] == []:
+                raise subprocess.CalledProcessError(
+                    returncode=1,
+                    cmd="/opt/cprocsp/bin/amd64/certmgr -list",
+                    output="Не удалось получить список установленных сертификатов"
+                )
+
+        except (subprocess.CalledProcessError, UnicodeDecodeError, OSError) as e:
+            gui.MessageWindows().show_warning_message_ui(
+                f"Ошибка при получении списка установленных сертификатов:\n{str(e.stdout)}.\nВероятно, нет установленных сертификатов.")
+            return None
+        else:
+            return list_of_installed_certificates_with_numbers[:-1]
 
     def delete_certificate_method_linux(self, surname):
         user_name = surname.split(": ", 1)[1]
@@ -186,12 +200,11 @@ class Run_Crypton_Functions:
         self.type = type
         self.signal = signal
 
-
     def nonsmb_functions(self, surname=None):
         if self.type == 3:
-            return SMBConnectionManager.list_of_installed_certificates_win(self)
+            return SMBConnectionManager.list_of_installed_certificates_linux(self)
         if self.type == 4:
-            SMBConnectionManager.delete_certificate_method_win(
+            SMBConnectionManager.delete_certificate_method_linux(
                 self, surname)
 
     def smbconnect_to_crypton(self, connection_id=None, surname=None):
