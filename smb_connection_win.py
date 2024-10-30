@@ -2,10 +2,10 @@ import os
 import io
 import subprocess
 from smb.SMBConnection import SMBConnection
+from smb import smb_structs, base
 import crypton_database_win as db
 import gui
 import re
-
 
 class SMBConnectionManager:
     def __init__(self, server_ip, share_name, folder_path, username, password, client_machine_name, server_name, domain_name, local_download_path, password_file_path, surname=None, signal=None):
@@ -75,87 +75,96 @@ class SMBConnectionManager:
                             local_file_path, local_file_name)
 
     def setup_sertificate_win(self, local_file_path, local_file_name):
-        # Получение информации о сертификате
-        result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list -file "{
-                local_file_path}"',
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='cp866'
-        )
-        output_cert_info = result.stdout
-        # Регулярные выражения для поиска дат выдачи и истечения
-        issued_pattern = re.search(
-            r'Выдан\s+:\s+\d{2}/\d{2}/(\d{4})', output_cert_info)
-        expires_pattern = re.search(
-            r'Истекает\s+:\s+\d{2}/\d{2}/(\d{4})', output_cert_info)
-        if issued_pattern and expires_pattern:
-            # Извлекаем годы выдачи и истечения
-            issued_year = issued_pattern.group(1)
-            expires_year = expires_pattern.group(1)
-
-        # Просмотр имеющихся контейнеров
-        result = subprocess.run(
-            '"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keyset -enum_cont -fqcn -verifyc',
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='cp866'
-        )
-
-        lines = result.stdout.split('\n')
-        matching_lines = [
-            line for line in lines if line.startswith(f"\\\\.\\FAT12_V\\{local_file_name[0:6]}")]
-
-        # Копирование закрытого ключа в реестр и установка сертификата
         try:
-            # Извлечение русского ФИО из контейнера сертификата
-            rus_name_pattern = re.findall(
-                r'[\u0400-\u04FF]+', matching_lines[0])
-            # Создание переменной для хранения русского ФИО и годов выдачи и истечения для создания контейнера в реестре Windows
-            container_name_with_dates = rus_name_pattern + \
-                [issued_year, expires_year]
-
-            # Проверка наличия контейнера в реестре
-            check_install_container = subprocess.run(
-                f'"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keyset -enum_cont -fqcn -verifyc | findstr /C:"{"".join(container_name_with_dates)}"',
+            # Получение информации о сертификате - используем один запрос вместо двух
+            result = subprocess.run(
+                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list -file "{local_file_path}"',
                 shell=True,
                 check=True,
                 capture_output=True,
                 text=True,
                 encoding='cp866'
             )
-            if check_install_container.returncode == 1:
-                # Копирование закрытого ключа в реестр
-                result = subprocess.run(
-                    f'"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keycopy -contsrc "{matching_lines[0]}" -contdest "\\\\.\\REGISTRY\\{''.join(container_name_with_dates)}"',
-                    shell=True,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    encoding='cp866'
-                )
-            # Установка сертификата
+            output_cert_info = result.stdout
+
+            # Используем один паттерн для поиска всех дат
+            dates = {
+                'issued': None,
+                'expires': None
+            }
+            
+            # Ищем даты в обоих форматах одновременно
+            for line in output_cert_info.split('\n'):
+                if any(x in line for x in ['Выдан', 'Not valid before']):
+                    match = re.search(r'\d{2}/\d{2}/(\d{4})', line)
+                    if match:
+                        dates['issued'] = match.group(1)
+                elif any(x in line for x in ['Истекает', 'Not valid after']):
+                    match = re.search(r'\d{2}/\d{2}/(\d{4})', line)
+                    if match:
+                        dates['expires'] = match.group(1)
+
+            if not dates['issued'] or not dates['expires']:
+                raise ValueError("Не удалось найти даты выдачи/истечения сертификата")
+
+            # Просмотр контейнеров - используем более эффективный поиск
             result = subprocess.run(
-                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -inst -file "{local_file_path}" -cont "\\\\.\\REGISTRY\\{''.join(container_name_with_dates)}"',  # noqa
+                '"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keyset -enum_cont -fqcn -verifyc',
                 shell=True,
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding='cp866'
             )
-            # Если код результата равен нулю, то в сигнал записывается сообщение об успешной установке сертификата
-            if result.returncode == 0:
-                local_file_name_strip = local_file_name.rstrip('.cer')
-                self.signal.emit(
-                    f"Сертификат пользователя {local_file_name_strip} успешно установлен.")
-                return True
-        except IndexError as e:
-            self.signal.emit(f"Не удалось связать сертификат пользователя {local_file_name} с контейнером. Ошибка: {e}")  # noqa
-        except subprocess.CalledProcessError as e:
-            self.signal.emit(f"Ошибка при установке сертификата {local_file_name}. Код ошибки: {e.returncode}. Сообщение: {e.stderr}")  # noqa
+            
+            # Оптимизированный поиск подходящего контейнера
+            parts_local_file_name = local_file_name.split()
+            matching_line = None
+            
+            if len(parts_local_file_name) > 1:
+                prefix = parts_local_file_name[0][0:3]
+                second_char = parts_local_file_name[1][0:1]
+                third_char = parts_local_file_name[2][0:1]
+                pattern = f"{prefix}.*{second_char}.*{third_char}"
+                
+                for line in result.stdout.split('\n'):
+                    if re.search(pattern, line):
+                        matching_line = line
+                        break
+            else:
+                pattern = f"\\\\.\\FAT12_V\\{local_file_name[0:3]}"
+                for line in result.stdout.split('\n'):
+                    if line.startswith(pattern):
+                        matching_line = line
+                        break
+
+            if not matching_line:
+                raise IndexError("Не найден подходящий контейнер")
+
+            # Извлечение русского ФИО из контейнера одним запросом
+            rus_name_pattern = ''.join(re.findall(r'[\u0400-\u04FF]+', matching_line))
+            
+            # Создание контейнера в реестре одной командой
+            container_name = f"{rus_name_pattern}{dates['issued']}{dates['expires']}"
+            install_container_command = f'"C:/Program Files (x86)/Crypto Pro/CSP/csptest" -keycopy -contsrc "{matching_line}" -contdest "\\\\.\\REGISTRY\\{container_name}"'
+            
+            subprocess.run(install_container_command, shell=True, check=True, capture_output=True, text=True, encoding='cp866')
+
+            # Установка сертификата
+            subprocess.run(
+                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -inst -file "{local_file_path}" -cont "\\\\.\\REGISTRY\\{container_name}"',
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding='cp866'
+            )
+
+            local_file_name_strip = local_file_name.rstrip('.cer')
+            self.signal.emit(f"Сертификат пользователя {local_file_name_strip} успешно установлен.")
+
+        except (subprocess.CalledProcessError, IndexError, ValueError) as e:
+            self.signal.emit(f"Ошибка при установке сертификата {local_file_name}: {str(e)}")
 
     def install_all_certificates(self, folder_path=None):
         if folder_path is None:
@@ -171,86 +180,105 @@ class SMBConnectionManager:
                         remote_file_path, local_dir_path)
 
     def list_of_installed_certificates_win(self):
-        result = subprocess.run(
-            '"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list | findstr /C:"Субъект" /C:"CN=" /C:"Истекает"',
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='cp866'
-        )
+        try:
+            # Пробуем сначала русский вывод
+            list_of_installed_certificates_command = '"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list | findstr /C:"Субъект" /C:"Истекает"'
+            result = subprocess.run(list_of_installed_certificates_command, shell=True, check=False, capture_output=True, text=True, encoding='cp866')
+            print(result.stdout)
+            # Если в выводе нет русских строк, используем английский вариант
+            if "Субъект" not in result.stdout or result.returncode != 0:
+                list_of_installed_certificates_command = '"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list | findstr /C:"Subject" /C:"Not valid after"'
+                result = subprocess.run(list_of_installed_certificates_command, shell=True, check=False, capture_output=True, text=True, encoding='cp866')
+                is_english = True
+                print(result.stdout)
+            else:
+                is_english = False
 
-        list_of_installed_certificates = result.stdout.split('\n')
-        list_of_certificates = []
-        # Создаем словарь для хранения информации о сертификатах
-        current_certificate = {}
-        number_of_lines = 1
+            # Проверяем, получили ли мы какой-либо вывод
+            if result.returncode != 0 and not result.stdout:
+                raise subprocess.CalledProcessError(
+                    result.returncode, 
+                    list_of_installed_certificates_command, 
+                    output="Не удалось получить список сертификатов"
+                )
 
-        for line in list_of_installed_certificates:
-            line = line.strip()
-            if "CN=" in line:
-                # Извлекаем только имя из строки с CN
-                current_certificate["CN"] = line.split("CN=")[-1]
-            elif "Истекает" in line:
-                # Извлекаем дату истечения
-                current_certificate["Expiration"] = line.split(
-                    "Истекает            : ")[-1].strip()
+            list_of_installed_certificates = result.stdout.split('\n')
+            print(list_of_installed_certificates)
+            list_of_certificates = []
+            current_certificate = {}
+            number_of_lines = 1
 
-                # Добавляем текущий сертификат в список с номером строки
-                if "CN" in current_certificate and "Expiration" in current_certificate:
-                    cert_info = f"{number_of_lines}: {current_certificate['CN']} | Истекает: {
-                        current_certificate['Expiration']}"
-                    list_of_certificates.append(cert_info)
-                    number_of_lines += 1
+            for line in list_of_installed_certificates:
+                line = line.strip()
+                if "CN=" in line:
+                    current_certificate["CN"] = line.split("CN=")[-1]
+                elif ("Истекает" in line) or ("Not valid after" in line):
+                    if is_english:
+                        current_certificate["Expiration"] = line.split("Not valid after     : ")[-1].strip()
+                    else:
+                        current_certificate["Expiration"] = line.split("Истекает            : ")[-1].strip()
 
-                # Очищаем информацию в словаре для следующего сертификата
-                current_certificate = {}
+                    if "CN" in current_certificate and "Expiration" in current_certificate:
+                        cert_info = f"{number_of_lines}: {current_certificate['CN']} | Истекает: {current_certificate['Expiration']}"
+                        list_of_certificates.append(cert_info)
+                        number_of_lines += 1
+                    current_certificate = {}
 
-        return list_of_certificates
+        except (subprocess.CalledProcessError, UnicodeDecodeError, OSError) as e:
+            gui.MessageWindows().show_warning_message_ui(f"Ошибка при получении списка установленных сертификатов: {str(e)}")
+            return None
+        else:
+            if list_of_certificates:
+                return list_of_certificates
+            else:
+                return None
 
     def delete_certificate_method_win(self, surname):
         # Извлекаем имя пользователя сертификата из строки с установленными сертификатами
         user_name = surname.split(": ", 1)[1]
         user_name = user_name.split(" | ", 1)[0]
-        # Находим идентификатор ключа для указанного пользователя
-        result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -list | findstr /C:"{user_name}" /C:"Идентификатор ключа : " /C:"Контейнер           : REGISTRY\\\\', # noqa
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='cp866'
-        )
-        # Извлекаем Идентификатор ключа и название контейнера из реестра
-        try:
-            key_identifier = result.stdout.split(
-                'Идентификатор ключа : ')[1].split()[0]
-            container_name_with_dates = result.stdout.split(
-                'Контейнер           : REGISTRY\\\\')[1].split()[0]
-        except IndexError:
-            self.signal.emit(
-                f"Не удалось извлечь идентификатор ключа для {user_name}.")
-            return
+        certificate_list_command = r'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -list'
+        result = subprocess.run(certificate_list_command, capture_output=True, text=True, shell=True, encoding='cp866')
 
-        # Удаляем сертификат
-        result = subprocess.run(
-            f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -certificate -keyid {
-                key_identifier}',
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True
-        )
+        # Разделение вывода на строки
+        lines = result.stdout.splitlines()
+
+        # Инициализация переменных для хранения результата
+        in_certificate = False
+        key_identifier = ""
+        container = ""
+
+        # Проход по каждой строке вывода
+        for line in lines:
+            # Поиск по русскому или английскому синтаксису
+            if (re.search(r"Субъект\s*:\s*(.+)", line) or re.search(r"Subject\s*:\s*(.+)", line)) and user_name in line:
+                in_certificate = True
+
+            # Если находимся в нужном разделе, ищем поля на обоих языках
+            if in_certificate:
+                # Поиск идентификатора ключа
+                if match := re.search(r"Идентификатор ключа\s*:\s*(.+)", line):
+                    key_identifier = match.group(1).strip()
+                elif match := re.search(r"SubjKeyID\s*:\s*(.+)", line):
+                    key_identifier = match.group(1).strip()
+                
+                # Поиск контейнера
+                if match := re.search(r"Контейнер\s*:\s+REGISTRY\\\\(.+)", line):
+                    container = match.group(1).strip()
+                elif match := re.search(r"Container\s*:\s+REGISTRY\\\\(.+)", line):
+                    container = match.group(1).strip()
+                
+                # Выход из цикла при достижении разделителя
+                if re.search(r"====|^\d+-+$", line):
+                    break
+
         try:
+            # Удаляем сертификат
+            delete_certificate_command = f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -certificate -keyid {key_identifier}'
+            result = subprocess.run(delete_certificate_command, shell=True, check=True, capture_output=True, text=True)
             # Удаляем закрытый контейнер из реестра
-            result = subprocess.run(
-                f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -container "\\\\.\\REGISTRY\\{
-                    container_name_with_dates}"',
-                shell=True,
-                check=True,
-                capture_output=True,
-                text=True
-            )
+            delete_container_command = f'"C:/Program Files (x86)/Crypto Pro/CSP/certmgr.exe" -delete -container "\\\\.\\REGISTRY\\{container}"'
+            result = subprocess.run(delete_container_command, shell=True, check=True, capture_output=True, text=True)
 
             # Если результат успешен
             if result.returncode == 0:
@@ -260,8 +288,6 @@ class SMBConnectionManager:
             self.signal.emit(
                 f"Ошибка при удалении сертификата {user_name}. Код ошибки: {e.returncode}. Сообщение: {e.stderr}")
 
-    def close_connection(self):
-        self.conn.close()
 
     def list_folders(self):
         folders = []
@@ -286,30 +312,7 @@ class Run_Crypton_Functions:
     def __init__(self, type=0, signal=None):
         self.type = type
         self.signal = signal
-        self.active_connection_id = db.DatabaseApp().load_active_connection()
-        self.connection = db.DatabaseApp().select_from_db(
-            self.active_connection_id[0])
-        self.default_connection = db.DatabaseApp().load_default_connection()
 
-    def open_settings_window_connection(self):
-        try:
-            with SMBConnectionManager(
-                server_ip=self.default_connection[2],
-                share_name=self.default_connection[7],
-                folder_path=self.default_connection[8],
-                username=self.default_connection[3],
-                password=self.default_connection[4],
-                client_machine_name="client_machine_name",
-                server_name=self.default_connection[6],
-                domain_name=self.default_connection[5],
-                local_download_path=self.default_connection[9],
-                password_file_path=self.default_connection[10],
-                signal=self.signal
-            ) as smb_connect:
-                return smb_connect.open_password_file()
-        except OSError:
-            gui.MessageWindows().show_warning_message_ui(
-                "Соединение с SMB-сервером разорвано.")
 
     def nonsmb_functions(self, surname=None):
         if self.type == 3:
@@ -318,29 +321,36 @@ class Run_Crypton_Functions:
             SMBConnectionManager.delete_certificate_method_win(
                 self, surname)
 
-    def smbconnect_to_crypton(self, surname=None):
+    def smbconnect_to_crypton(self, connection_id=None, surname=None):
+        if connection_id is None:
+            self.active_connection_id = db.DatabaseApp().load_active_connection()
+            self.active_connection = db.DatabaseApp().select_from_db(
+                self.active_connection_id[0])
+        else:
+            self.active_connection = db.DatabaseApp().select_from_db(connection_id)
         try:
             with SMBConnectionManager(
-                server_ip=self.connection[2],
-                share_name=self.connection[7],
-                folder_path=self.connection[8],
-                username=self.connection[3],
-                password=self.connection[4],
+                server_ip=self.active_connection[2],
+                share_name=self.active_connection[7],
+                folder_path=self.active_connection[8],
+                username=self.active_connection[3],
+                password=self.active_connection[4],
                 client_machine_name="client_machine_name",
-                server_name=self.connection[6],
-                domain_name=self.connection[5],
-                local_download_path=self.connection[9],
-                password_file_path=self.connection[10],
+                server_name=self.active_connection[6],
+                domain_name=self.active_connection[5],
+                local_download_path=self.active_connection[9],
+                password_file_path=self.active_connection[10],
                 surname=surname,
                 signal=self.signal
             ) as smb_connect:
                 if self.type == 1:
-                    smb_connect.search_and_download()
+                    return smb_connect.search_and_download()
                 if self.type == 2:
                     smb_connect.install_all_certificates()
                 if self.type == 5:
                     return smb_connect.open_password_file()
                 return smb_connect.list_folders()
-        except OSError:
+        except (ConnectionRefusedError, smb_structs.OperationFailure, AssertionError, base.NotConnectedError):
             gui.MessageWindows().show_warning_message_ui(
-                "Не удалось подключиться к SMB-серверу.\nПроверьте данные подключения.")
+                "Не удалось подключиться к SMB-серверу.\nПроверьте интернет соединение или настройки подключения.")
+            return None

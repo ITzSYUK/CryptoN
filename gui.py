@@ -232,11 +232,12 @@ class SettingsWindow(QWidget):
         if connection_index >= 0:
             connection_id = self.list_of_connections_widget.itemData(
                 connection_index)
-            connection_status = db.DatabaseApp().save_active_connection(connection_id)
-            if connection_status is False:
+            connection_status = Run_Crypton_Functions().smbconnect_to_crypton(connection_id)
+            if connection_status is None:
                 return
-            self.notify_message.show_success_message_ui(
-                "Активное подключение установлено!")
+            else:
+                db.DatabaseApp().save_active_connection(connection_id)
+                self.notify_message.show_success_message_ui("Активное подключение установлено!")
 
     def load_active_connection(self):
         active_connection_id = db.DatabaseApp().load_active_connection()
@@ -305,7 +306,7 @@ class SettingsAuthorizationWindow(QWidget):
 
     def show_settings_window(self):
         password = self.password_line_edit.text()
-        veryfication_password = Run_Crypton_Functions().open_settings_window_connection()
+        veryfication_password = Run_Crypton_Functions(type=5).smbconnect_to_crypton(connection_id=1)
         if password == veryfication_password:
             self.close()
             self.settings_window = SettingsWindow()
@@ -315,7 +316,7 @@ class SettingsAuthorizationWindow(QWidget):
 
 
 class ShowInstalledLogListCertificate(QThread):
-    certificate_installed = pyqtSignal(str)
+    signal_label = pyqtSignal(str)
 
     def __init__(self, password=None):
         super().__init__()
@@ -324,7 +325,7 @@ class ShowInstalledLogListCertificate(QThread):
     def run(self):
         try:
             install_certificates = Run_Crypton_Functions(
-                2, self.certificate_installed)
+                2, self.signal_label)
             install_certificates.smbconnect_to_crypton()
         finally:
             self.quit()
@@ -332,7 +333,7 @@ class ShowInstalledLogListCertificate(QThread):
 
 class DetailWindow(QWidget):
     # Создание атрибута сигнала
-    certificate_installed = pyqtSignal(str)
+    signal_label = pyqtSignal(str)
 
     def __init__(self, type=0, password=None):
         super().__init__()
@@ -350,13 +351,13 @@ class DetailWindow(QWidget):
 
     def setup_one_sertificate(self):
         layout = QVBoxLayout()
-        self.listWidget = QListWidget()
-        self.listWidget.setFixedHeight(220)
+        self.inst_one_cert_list_widget = QListWidget()
+        self.inst_one_cert_list_widget.setFixedHeight(220)
         self.search_certificate_line = QLineEdit()
-        self.listWidget.setFont(self.font())
+        self.inst_one_cert_list_widget.setFont(self.font())
         self.search_certificate_line.setPlaceholderText("ПОИСК: Введите свою фамилию")  # noqa
         layout.addWidget(self.search_certificate_line)
-        layout.addWidget(self.listWidget)
+        layout.addWidget(self.inst_one_cert_list_widget)
         items = Run_Crypton_Functions().smbconnect_to_crypton()
         if items is None:
             return
@@ -384,43 +385,46 @@ class DetailWindow(QWidget):
         layout.addLayout(notify_layout)
 
         for item in items:
-            QListWidgetItem(item, self.listWidget)
-        self.listWidget.itemDoubleClicked.connect(
+            QListWidgetItem(item, self.inst_one_cert_list_widget)
+        self.inst_one_cert_list_widget.itemDoubleClicked.connect(
             self.download_one_sertificate)
         self.start_button.clicked.connect(self.download_one_sertificate)
         self.setLayout(layout)
         self.setWindowTitle('Установка сертификата')
         self.setFixedWidth(600)
 
-        self.certificate_installed.connect(self.update_label)
-        self.search_certificate_line.textChanged.connect(
-            self.filter_certificate_list)
+        self.signal_label.connect(self.update_label)
+        self.search_certificate_line.textChanged.connect(self.filter_setup_certificate_list)
 
         self.show()
+
+    def filter_setup_certificate_list(self):
+        found_cert_name = self.search_certificate_line.text().lower()
+        for i in range(self.inst_one_cert_list_widget.count()):
+            found_cert = self.inst_one_cert_list_widget.item(i)
+            found_cert.setHidden(
+                found_cert_name not in found_cert.text().lower())
+
 
     def download_one_sertificate(self, item=None, password=None):
         password = self.authorize_setup_cert_line.text()
         verification_password = Run_Crypton_Functions(
             5).smbconnect_to_crypton()
+        if verification_password is None:
+            return
         if password == verification_password:
-            selected_item = self.listWidget.selectedItems()
+            selected_item = self.inst_one_cert_list_widget.selectedItems()
             if selected_item:
-                download_sertificate_by_button = Run_Crypton_Functions(
-                    1, self.certificate_installed)
-                download_sertificate_by_button.smbconnect_to_crypton(
-                    selected_item[0].text())
+                Run_Crypton_Functions(1, self.signal_label).smbconnect_to_crypton(surname=selected_item[0].text())
             elif item:
-                download_sertificate_by_double_click = Run_Crypton_Functions(
-                    1, self.certificate_installed)
-                download_sertificate_by_double_click.smbconnect_to_crypton(
-                    item.text())
+                Run_Crypton_Functions(1, self.signal_label).smbconnect_to_crypton(surname=item.text())
             else:
-                self.certificate_installed.emit("Сертификат не выбран")
+                self.signal_label.emit("Сертификат не выбран")
         elif password == "":
-            self.certificate_installed.emit(
+            self.signal_label.emit(
                 "Для начала установки введите пароль")
         else:
-            self.certificate_installed.emit("Неверный пароль")
+            self.signal_label.emit("Неверный пароль")
 
     def setup_all_sertificate(self, password=None):
         self.log_window = QWidget()
@@ -431,7 +435,7 @@ class DetailWindow(QWidget):
         self.log_window.setWindowTitle('Установка сертификатов')
         self.log_window.setFixedSize(600, 300)
 
-        self.certificate_installed.connect(
+        self.signal_label.connect(
             self.update_list_for_setup_all_certificates)
 
         verification_password = Run_Crypton_Functions(
@@ -441,13 +445,19 @@ class DetailWindow(QWidget):
             # Создается новый экземпляр потока для открытия окна со списком логов установленных сертификатов
             self.thread_log_list_certificates = ShowInstalledLogListCertificate(
                 password)
-            self.thread_log_list_certificates.certificate_installed.connect(
+            self.thread_log_list_certificates.signal_label.connect(
                 self.update_list_for_setup_all_certificates)
             self.thread_log_list_certificates.start()
 
     def delete_certificate_window(self):
         self.del_cert_window = QWidget()
         layout = QVBoxLayout()
+
+        # Добавляем поле поиска
+        self.search_delete_certificate_line = QLineEdit()
+        self.search_delete_certificate_line.setPlaceholderText("ПОИСК: Введите название сертификата")
+        self.search_delete_certificate_line.setFont(self.font())
+
         self.del_cert_list = QListWidget()
         self.label = QLabel()
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -456,53 +466,53 @@ class DetailWindow(QWidget):
         self.del_cert_list.setFont(self.font())
         self.label.setFont(self.font())
         self.delete_button.setFont(self.font())
+        layout.addWidget(self.search_delete_certificate_line)
         layout.addWidget(self.del_cert_list)
         layout.addWidget(self.delete_button)
         layout.addWidget(self.label)
         cert_list = Run_Crypton_Functions(3).nonsmb_functions()
-        if cert_list == []:
-            MessageWindows().show_warning_message_ui("Нет установленных сертификатов")
+        if cert_list is None:
             return
         for item in cert_list:
             QListWidgetItem(item, self.del_cert_list)
         self.del_cert_list.itemDoubleClicked.connect(
             self.delete_certificate_slot)
         self.delete_button.clicked.connect(self.delete_certificate_slot)
+        self.search_delete_certificate_line.textChanged.connect(self.filter_delete_certificate_list)
         self.del_cert_window.setLayout(layout)
         self.del_cert_window.setWindowTitle('Удаление сертификатов')
         self.del_cert_window.setFixedSize(600, 300)
 
         self.del_cert_window.show()
 
-        self.certificate_installed.connect(self.update_label)
+        self.signal_label.connect(self.update_label)
+
+    def filter_delete_certificate_list(self):
+        found_cert_name = self.search_delete_certificate_line.text().lower()
+        for i in range(self.del_cert_list.count()):
+            found_cert = self.del_cert_list.item(i)
+            found_cert.setHidden(found_cert_name not in found_cert.text().lower())
 
     def delete_certificate_slot(self, item=None):
         selected_item = self.del_cert_list.selectedItems()
         if selected_item:
             delete_sertificate_by_button = Run_Crypton_Functions(
-                4, self.certificate_installed)
+                4, self.signal_label)
             delete_sertificate_by_button.nonsmb_functions(
                 selected_item[0].text())
             self.remove_certificate_name_from_list()
         elif item:
             delete_sertificate_by_double_click = Run_Crypton_Functions(
-                4, self.certificate_installed)
+                4, self.signal_label)
             delete_sertificate_by_double_click.nonsmb_functions(item.text())
             self.remove_certificate_name_from_list()
         else:
-            self.certificate_installed.emit("Сертификат не выбран")
+            self.signal_label.emit("Сертификат не выбран")
 
     def remove_certificate_name_from_list(self):
         selected_certificate = self.del_cert_list.currentItem()
         self.del_cert_list.takeItem(
             self.del_cert_list.row(selected_certificate))
-
-    def filter_certificate_list(self):
-        found_cert_name = self.search_certificate_line.text().lower()
-        for i in range(self.listWidget.count()):
-            found_cert = self.listWidget.item(i)
-            found_cert.setHidden(
-                found_cert_name not in found_cert.text().lower())
 
     @ pyqtSlot(str)
     def update_label(self, message):
@@ -532,17 +542,17 @@ class MainWindow(QWidget):
 
     def initUI(self):
         self.main_window_certificates_layout = QVBoxLayout()
-        self.listWidget = QListWidget()
-        self.listWidget.setFixedSize(550, 150)
+        self.main_list_widget = QListWidget()
+        self.main_list_widget.setFixedSize(550, 150)
 
-        self.listWidget.setFont(self.font())
+        self.main_list_widget.setFont(self.font())
 
         items = ["Установить отдельный сертификат",
                  "Установить все сертификаты", "Удалить сертификат", "Настройки"]
         for item in items:
-            QListWidgetItem(item, self.listWidget)
-        self.listWidget.itemDoubleClicked.connect(self.showDetailWindow)
-        self.main_window_certificates_layout.addWidget(self.listWidget)
+            QListWidgetItem(item, self.main_list_widget)
+        self.main_list_widget.itemDoubleClicked.connect(self.showDetailWindow)
+        self.main_window_certificates_layout.addWidget(self.main_list_widget)
         self.setLayout(self.main_window_certificates_layout)
         self.setWindowTitle(
             'Система управления криптографическими алгоритмами')
