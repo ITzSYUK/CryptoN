@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout, QComboBox, QMessageBox
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
 from smb_connection_win import Run_Crypton_Functions
 import crypton_database_win as db
@@ -536,7 +536,6 @@ class DetailWindow(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowIcon(QIcon('C:\\Users\\vboxuser\\crypton\\icon.ico'))
         self.setup_databes = db.DatabaseApp()
         self.initUI()
 
