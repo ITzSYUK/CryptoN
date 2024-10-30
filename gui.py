@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout, QComboBox, QMessageBox, QCompleter
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QPushButton, QLineEdit, QHBoxLayout, QComboBox, QMessageBox
 from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread, QTimer
 from smb_connection_win import Run_Crypton_Functions
