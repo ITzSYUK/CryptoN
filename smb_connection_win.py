@@ -184,13 +184,11 @@ class SMBConnectionManager:
             # Пробуем сначала русский вывод
             list_of_installed_certificates_command = '"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list | findstr /C:"Субъект" /C:"Истекает"'
             result = subprocess.run(list_of_installed_certificates_command, shell=True, check=False, capture_output=True, text=True, encoding='cp866')
-            print(result.stdout)
             # Если в выводе нет русских строк, используем английский вариант
             if "Субъект" not in result.stdout or result.returncode != 0:
                 list_of_installed_certificates_command = '"C:/Program Files (x86)/Crypto Pro/CSP/certmgr" -list | findstr /C:"Subject" /C:"Not valid after"'
                 result = subprocess.run(list_of_installed_certificates_command, shell=True, check=False, capture_output=True, text=True, encoding='cp866')
                 is_english = True
-                print(result.stdout)
             else:
                 is_english = False
 
@@ -203,7 +201,6 @@ class SMBConnectionManager:
                 )
 
             list_of_installed_certificates = result.stdout.split('\n')
-            print(list_of_installed_certificates)
             list_of_certificates = []
             current_certificate = {}
             number_of_lines = 1
@@ -225,7 +222,7 @@ class SMBConnectionManager:
                     current_certificate = {}
 
         except (subprocess.CalledProcessError, UnicodeDecodeError, OSError) as e:
-            gui.MessageWindows().show_warning_message_ui(f"Ошибка при получении списка установленных сертификатов: {str(e)}")
+            gui.MessageWindows().show_warning_message_ui(f"Ошибка при получении списка установленных сертификатов:\n{str(e.stdout)}.\nВероятно, нет установленных сертификатов.")
             return None
         else:
             if list_of_certificates:
