@@ -114,8 +114,6 @@ class SMBConnectionManager:
                     self.download_directory_from_smb(
                         remote_file_path, local_dir_path)
 
-        os.popen("rm -rf /var/opt/cprocsp/keys/user/*")
-
     def list_of_installed_certificates_linux(self):
         try:
             with os.popen(rf"/opt/cprocsp/bin/amd64/certmgr -list | grep -E 'Субъект|Истекает' | sed -n 's/.*CN=\(.*\)/\1/p; s/.*Истекает\s*:\s*/ | Истекает: /p' | paste -d '' - - ") as output:  # noqa
