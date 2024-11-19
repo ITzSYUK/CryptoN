@@ -208,11 +208,11 @@ class SettingsWindow(QWidget):
         index = self.list_of_connections_widget.currentIndex()
         connection_data = db.DatabaseApp().select_from_db(
             self.list_of_connections_widget.itemData(index))
-        # Проверяем, равно ли занчение поля is_default единице
         if connection_data is None:
             MessageWindows().show_warning_message_ui(
                 "Нет доступных подключений для удаления.")
             return
+        # Проверяем, равно ли значение поля is_default единице
         elif connection_data[-1] == 1:
             MessageWindows().show_warning_message_ui(
                 'Нельзя удалять подключение по умолчанию.')
