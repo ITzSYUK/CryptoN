@@ -66,6 +66,7 @@ class SettingsWindow(QWidget):
         ip_layout = QHBoxLayout()
         self.ip_line_text = QLabel('IP:')
         self.ip_line_edit = QLineEdit()
+        self.ip_line_edit.setPlaceholderText("IP-адрес")
         ip_layout.addWidget(self.ip_line_text)
         ip_layout.addWidget(self.ip_line_edit)
 
@@ -73,6 +74,7 @@ class SettingsWindow(QWidget):
         username_layout = QHBoxLayout()
         self.username_line_text = QLabel('Username:')
         self.username_line_edit = QLineEdit()
+        self.username_line_edit.setPlaceholderText("Имя пользователя")
         username_layout.addWidget(self.username_line_text)
         username_layout.addWidget(self.username_line_edit)
 
@@ -80,6 +82,7 @@ class SettingsWindow(QWidget):
         password_layout = QHBoxLayout()
         self.password_line_text = QLabel('Password:')
         self.password_line_edit = QLineEdit()
+        self.password_line_edit.setPlaceholderText("Пароль")
         password_layout.addWidget(self.password_line_text)
         password_layout.addWidget(self.password_line_edit)
 
@@ -87,6 +90,8 @@ class SettingsWindow(QWidget):
         domain_name_layout = QHBoxLayout()
         self.domain_name_line_text = QLabel('Domain name:')
         self.domain_name_line_edit = QLineEdit()
+        self.domain_name_line_edit.setPlaceholderText(
+            "Доменное имя (SAMBA/WORKGROUP)")
         domain_name_layout.addWidget(self.domain_name_line_text)
         domain_name_layout.addWidget(self.domain_name_line_edit)
 
@@ -94,6 +99,8 @@ class SettingsWindow(QWidget):
         server_name_layout = QHBoxLayout()
         self.server_name_line_text = QLabel('Server name:')
         self.server_name_line_edit = QLineEdit()
+        self.server_name_line_edit.setPlaceholderText(
+            "Имя сервера (Название хоста)")
         server_name_layout.addWidget(self.server_name_line_text)
         server_name_layout.addWidget(self.server_name_line_edit)
 
@@ -101,6 +108,7 @@ class SettingsWindow(QWidget):
         sharename_layout = QHBoxLayout()
         self.sharename_line_text = QLabel('Sharename:')
         self.sharename_line_edit = QLineEdit()
+        self.sharename_line_edit.setPlaceholderText("Имя общего ресурса")
         sharename_layout.addWidget(self.sharename_line_text)
         sharename_layout.addWidget(self.sharename_line_edit)
 
@@ -108,6 +116,8 @@ class SettingsWindow(QWidget):
         remote_certs_path_layout = QHBoxLayout()
         self.remote_certs_path_line_text = QLabel('Remote certs path:')
         self.remote_certs_path_line_edit = QLineEdit()
+        self.remote_certs_path_line_edit.setPlaceholderText(
+            "Путь к директории с сертификатами на удалённом сервере")
         remote_certs_path_layout.addWidget(self.remote_certs_path_line_text)
         remote_certs_path_layout.addWidget(self.remote_certs_path_line_edit)
 
@@ -115,6 +125,8 @@ class SettingsWindow(QWidget):
         local_download_path_layout = QHBoxLayout()
         self.local_download_path_line_text = QLabel('Local certs path:')
         self.local_download_path_line_edit = QLineEdit()
+        self.local_download_path_line_edit.setPlaceholderText(
+            "Локальный путь к директории с сертификатами")
         local_download_path_layout.addWidget(
             self.local_download_path_line_text)
         local_download_path_layout.addWidget(
@@ -124,6 +136,8 @@ class SettingsWindow(QWidget):
         remote_password_path_layout = QHBoxLayout()
         self.remote_password_path_line_text = QLabel('Password file path:')
         self.remote_password_path_line_edit = QLineEdit()
+        self.remote_password_path_line_edit.setPlaceholderText(
+            "Путь к файлу с паролем на удалённом сервере")
         remote_password_path_layout.addWidget(
             self.remote_password_path_line_text)
         remote_password_path_layout.addWidget(
@@ -137,13 +151,19 @@ class SettingsWindow(QWidget):
         self.delete_button.setFixedSize(200, 30)
         self.connect_button = QPushButton('Подключиться')
         self.connect_button.setFixedSize(200, 30)
+        self.default_connection_button = QPushButton('По умолчанию')
+        self.default_connection_button.setFixedSize(200, 30)
+
         buttons_layout.addWidget(self.delete_button)
         buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.default_connection_button)
         buttons_layout.addWidget(self.connect_button)
 
         self.save_button.clicked.connect(self.save_settings)
         self.delete_button.clicked.connect(self.delete_settings)
         self.connect_button.clicked.connect(self.connect_to_server)
+        self.default_connection_button.clicked.connect(
+            self.set_default_connection)
 
         main_layout.addLayout(list_of_connections_layout)
         main_layout.addLayout(name_layout)
@@ -186,16 +206,33 @@ class SettingsWindow(QWidget):
 
     def delete_settings(self):
         index = self.list_of_connections_widget.currentIndex()
-        if index == 0:
-            QMessageBox.warning(
-                self, 'Ошибка', 'Нельзя удалять подключение по умолчанию')
+        connection_data = db.DatabaseApp().select_from_db(
+            self.list_of_connections_widget.itemData(index))
+        # Проверяем, равно ли занчение поля is_default единице
+        if connection_data is None:
+            MessageWindows().show_warning_message_ui(
+                "Нет доступных подключений для удаления.")
+            return
+        elif connection_data[-1] == 1:
+            MessageWindows().show_warning_message_ui(
+                'Нельзя удалять подключение по умолчанию.')
             return
         connection_id_to_delete = self.list_of_connections_widget.itemData(
             index)
         db.DatabaseApp().delete_from_db(connection_id_to_delete)
-        db.DatabaseApp().save_active_connection("1")
-        self.notify_message.show_success_message_ui(
-            "Подключение удалено!\nВосстановлено активное подключение по умолчанию")
+        try:
+            db.DatabaseApp().save_active_connection(
+                db.DatabaseApp().get_deault_connection()[0])
+        except TypeError:
+            self.notify_message.show_success_message_ui(
+                "Подключение удалено!")
+            self.list_of_connections_widget.removeItem(index)
+            return
+        else:
+            default_connection_data = db.DatabaseApp().select_from_db(
+                db.DatabaseApp().get_deault_connection()[0])
+            self.notify_message.show_success_message_ui(
+                f"Подключение удалено!\nВосстановлено активное подключение по умолчанию: {default_connection_data[1]}.")
 
         self.list_of_connections_widget.removeItem(index)
 
@@ -237,12 +274,20 @@ class SettingsWindow(QWidget):
                 return
             else:
                 db.DatabaseApp().save_active_connection(connection_id)
-                self.notify_message.show_success_message_ui("Активное подключение установлено!")
+                self.notify_message.show_success_message_ui(
+                    "Активное подключение установлено!")
 
     def load_active_connection(self):
         active_connection_id = db.DatabaseApp().load_active_connection()
-        if active_connection_id[0]:
-            self.load_connection(active_connection_id[0])
+        if active_connection_id or db.DatabaseApp().select_from_db(1):
+            if active_connection_id:
+                self.load_connection(active_connection_id[0])
+            else:
+                # Если нет активного соединения, но есть созданные, загружаем первое созданное
+                self.load_connection(db.DatabaseApp().select_from_db(1)[0])
+        # Если нет созданных и активнного соединения, сбрасываем загрузку подключения
+        elif active_connection_id is None:
+            return
 
     def load_connection(self, connection_id):
         connection = db.DatabaseApp().select_from_db(connection_id)
@@ -261,13 +306,21 @@ class SettingsWindow(QWidget):
             if index >= 0:
                 self.list_of_connections_widget.setCurrentIndex(index)
 
+    def set_default_connection(self):
+        connection_index = self.list_of_connections_widget.currentIndex()
+        if connection_index >= 0:
+            connection_id = self.list_of_connections_widget.itemData(
+                connection_index)
+            db.DatabaseApp().update_default_connection(connection_id)
+            self.notify_message.show_success_message_ui(
+                "Подключение по умолчанию установлено!")
+
 
 class SettingsAuthorizationWindow(QWidget):
 
     def __init__(self):
         super().__init__()
         self.setupUi()
-
         self.show()
 
     def setupUi(self):
@@ -306,8 +359,8 @@ class SettingsAuthorizationWindow(QWidget):
 
     def show_settings_window(self):
         password = self.password_line_edit.text()
-        veryfication_password = Run_Crypton_Functions(type=5).smbconnect_to_crypton(connection_id=1)
-        if password == veryfication_password:
+        # Пароль для окна настроек по умолчанию
+        if password == "admin":
             self.close()
             self.settings_window = SettingsWindow()
             return self.password_line_edit.text()
@@ -394,7 +447,8 @@ class DetailWindow(QWidget):
         self.setFixedWidth(600)
 
         self.signal_label.connect(self.update_label)
-        self.search_certificate_line.textChanged.connect(self.filter_setup_certificate_list)
+        self.search_certificate_line.textChanged.connect(
+            self.filter_setup_certificate_list)
 
         self.show()
 
@@ -405,7 +459,6 @@ class DetailWindow(QWidget):
             found_cert.setHidden(
                 found_cert_name not in found_cert.text().lower())
 
-
     def download_one_sertificate(self, item=None, password=None):
         password = self.authorize_setup_cert_line.text()
         verification_password = Run_Crypton_Functions(
@@ -415,9 +468,11 @@ class DetailWindow(QWidget):
         if password == verification_password:
             selected_item = self.inst_one_cert_list_widget.selectedItems()
             if selected_item:
-                Run_Crypton_Functions(1, self.signal_label).smbconnect_to_crypton(surname=selected_item[0].text())
+                Run_Crypton_Functions(1, self.signal_label).smbconnect_to_crypton(
+                    surname=selected_item[0].text())
             elif item:
-                Run_Crypton_Functions(1, self.signal_label).smbconnect_to_crypton(surname=item.text())
+                Run_Crypton_Functions(1, self.signal_label).smbconnect_to_crypton(
+                    surname=item.text())
             else:
                 self.signal_label.emit("Сертификат не выбран")
         elif password == "":
@@ -455,7 +510,8 @@ class DetailWindow(QWidget):
 
         # Добавляем поле поиска
         self.search_delete_certificate_line = QLineEdit()
-        self.search_delete_certificate_line.setPlaceholderText("ПОИСК: Введите название сертификата")
+        self.search_delete_certificate_line.setPlaceholderText(
+            "ПОИСК: Введите название сертификата")
         self.search_delete_certificate_line.setFont(self.font())
 
         self.del_cert_list = QListWidget()
@@ -478,7 +534,8 @@ class DetailWindow(QWidget):
         self.del_cert_list.itemDoubleClicked.connect(
             self.delete_certificate_slot)
         self.delete_button.clicked.connect(self.delete_certificate_slot)
-        self.search_delete_certificate_line.textChanged.connect(self.filter_delete_certificate_list)
+        self.search_delete_certificate_line.textChanged.connect(
+            self.filter_delete_certificate_list)
         self.del_cert_window.setLayout(layout)
         self.del_cert_window.setWindowTitle('Удаление сертификатов')
         self.del_cert_window.setFixedSize(600, 300)
@@ -491,7 +548,8 @@ class DetailWindow(QWidget):
         found_cert_name = self.search_delete_certificate_line.text().lower()
         for i in range(self.del_cert_list.count()):
             found_cert = self.del_cert_list.item(i)
-            found_cert.setHidden(found_cert_name not in found_cert.text().lower())
+            found_cert.setHidden(
+                found_cert_name not in found_cert.text().lower())
 
     def delete_certificate_slot(self, item=None):
         selected_item = self.del_cert_list.selectedItems()
