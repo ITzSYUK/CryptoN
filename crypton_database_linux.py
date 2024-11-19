@@ -6,8 +6,8 @@ from getpass import getuser
 class DatabaseApp():
     def __init__(self):
         super().__init__()
-        self.username = getuser()
-        db_path = f'/home/{self.username}/crypton.db'
+        self.USERNAME = getuser()
+        db_path = f'/home/{self.USERNAME}/crypton.db'
         # Устанавливаем соединение с базой данных
         self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
