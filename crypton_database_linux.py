@@ -1,11 +1,13 @@
 import sqlite3
 import gui
+from getpass import getuser
 
 
 class DatabaseApp():
     def __init__(self):
         super().__init__()
-        db_path = '/home/user/crypton.db'
+        self.username = getuser()
+        db_path = f'/home/{self.username}/crypton.db'
         # Устанавливаем соединение с базой данных
         self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
@@ -24,7 +26,8 @@ class DatabaseApp():
                 sharename TEXT NOT NULL,
                 remote_certs_path TEXT NOT NULL,
                 local_download_path TEXT NOT NULL,
-                password_path TEXT NOT NULL
+                password_path TEXT NOT NULL,
+                is_default INTEGER DEFAULT 0
             )
         ''')
 
@@ -35,17 +38,17 @@ class DatabaseApp():
             )
         """)
 
-        self.cursor.execute(
-            "INSERT OR IGNORE INTO active_connection VALUES ('active_connection', '1')")
+        # self.cursor.execute(
+        #     "INSERT OR IGNORE INTO active_connection VALUES ('active_connection', '1')")
 
-        # Данные по умолчанию
-        self.cursor.execute(
-            'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "192.168.0.100", "username", "password", "SAMBA", "server-terminal", "sharename", "/distr/certificates", "/var/opt/cprocsp/keys/user/", "/distr/certs_password.txt")')
-        self.conn.commit()
+        # # Данные по умолчанию
+        # self.cursor.execute(
+        #     f'INSERT OR IGNORE INTO smbconnectconfig VALUES (1, "По умолчанию", "172.25.87.3", "cert_user", "cert2024", "SAMBA", "server-terminal", "обменник поликлиники", "/distr/certificates", "/home/{self.username}/Downloads", "/distr/certs_password.txt")')
+        # self.conn.commit()
 
     def save_to_db(self, name_of_connection, ipaddress, username, password, domainname, servername, sharename, remote_cert_path, local_download_path, password_path):
         # Обновляем данные в базе
-        self.cursor.execute("SELECT COUNT(*) FROM smbconnectconfig WHERE name_of_connection=? AND ipaddress=? AND username=? AND password=? AND domainname=? AND servername=? AND sharename=? AND remote_certs_path=? AND local_download_path=? AND password_path=?",
+        self.cursor.execute("SELECT COUNT(*) FROM smbconnectconfig WHERE name_of_connection=? AND ipaddress=? AND username=? AND password=? AND domainname=? AND servername=? AND sharename=? AND remote_certs_path=? AND local_download_path=? AND password_path=? AND is_default=0",
                             (name_of_connection, ipaddress, username, password, domainname, servername, sharename, remote_cert_path, local_download_path, password_path))
         existing_entry = self.cursor.fetchone()
         # Проверяем, существует ли запись с таким именем
@@ -54,7 +57,7 @@ class DatabaseApp():
         exist_name_of_connection = self.cursor.fetchone()
         if existing_entry[0] > 0:
             self.notify_message.show_warning_message_ui(
-                "Ошибка. Такая запись уже существует!")
+                f"Ошибка. Запись с названием {name_of_connection} уже существует!")
             return False
 
         elif exist_name_of_connection is None:
@@ -87,10 +90,22 @@ class DatabaseApp():
             "SELECT value FROM active_connection WHERE key = ?", ("active_connection",))
         return self.cursor.fetchone()
 
+    def get_deault_connection(self):
+        self.cursor.execute(
+            "SELECT id FROM smbconnectconfig WHERE is_default = 1")
+        return self.cursor.fetchone()
+
     def load_default_connection(self):
         self.cursor.execute(
-            "SELECT * FROM smbconnectconfig WHERE id = ?", (1,))
+            "SELECT * FROM smbconnectconfig WHERE is_default = 1")
         return self.cursor.fetchone()
+
+    def update_default_connection(self, connection_id):
+        self.cursor.execute(
+            "UPDATE smbconnectconfig SET is_default = 0 WHERE is_default = 1")
+        self.cursor.execute(
+            "UPDATE smbconnectconfig SET is_default = 1 WHERE id = ?", (connection_id,))
+        self.conn.commit()
 
     def delete_from_db(self, connection_id):
         # # Удаляем данные из базы

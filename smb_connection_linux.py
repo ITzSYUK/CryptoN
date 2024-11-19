@@ -208,6 +208,10 @@ class Run_Crypton_Functions:
     def smbconnect_to_crypton(self, connection_id=None, surname=None):
         if connection_id is None:
             self.active_connection_id = db.DatabaseApp().load_active_connection()
+            if self.active_connection_id is None:
+                gui.MessageWindows().show_warning_message_ui(
+                    "Активное соединение не установлено.\nПожалуйста, настройте соединение и попробуйте ещё раз.")
+                return
             self.active_connection = db.DatabaseApp().select_from_db(
                 self.active_connection_id[0])
         else:
